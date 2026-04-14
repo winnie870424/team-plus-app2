@@ -6,10 +6,48 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>事業藍圖｜Team+</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
-<!-- Firebase SDK (compat - works in all browsers without module issues) -->
+<!-- Auth UI — loaded BEFORE Firebase so buttons always work -->
+<script>
+var _authMode = 'login';
+function switchAuthTab(mode) {
+  _authMode = mode;
+  var tabLogin    = document.getElementById('tab-login');
+  var tabRegister = document.getElementById('tab-register');
+  var regFields   = document.getElementById('auth-register-fields');
+  var submitBtn   = document.getElementById('auth-submit-btn');
+  var err         = document.getElementById('auth-error');
+  var forgotLink  = document.getElementById('forgot-link');
+  if (tabLogin)    tabLogin.classList.toggle('on', mode === 'login');
+  if (tabRegister) tabRegister.classList.toggle('on', mode === 'register');
+  if (regFields)   regFields.style.display = mode === 'register' ? 'flex' : 'none';
+  if (submitBtn)   submitBtn.textContent   = mode === 'register' ? '✦ 建立帳號' : '登入';
+  if (err)         { err.textContent = ''; err.style.color = '#C53030'; }
+  if (forgotLink)  forgotLink.style.display = mode === 'login' ? 'inline' : 'none';
+}
+async function _authSubmit() {
+  var btn = document.getElementById('auth-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
+  try {
+    if (_authMode === 'register' && window._doRegister) await window._doRegister();
+    else if (window._doLogin) await window._doLogin();
+    else { document.getElementById('auth-error').textContent = '系統尚未就緒，請重新整理'; }
+  } catch(e) {
+    var err = document.getElementById('auth-error');
+    if (err) err.textContent = '錯誤：' + e.message;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = _authMode === 'register' ? '✦ 建立帳號' : '登入'; }
+  }
+}
+</script>
+
+<!-- Firebase SDK -->
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
 <script>
 // Show auth screen immediately so page is never blank
 document.addEventListener('DOMContentLoaded', function() {
@@ -19,12 +57,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 try {
 const firebaseConfig = {
-apiKey: “AIzaSyDk8hU_GYvI1FvuLjpUVdYtITZ2jomeDuo”,
-authDomain: “hagi-business-app.firebaseapp.com”,
-projectId: “hagi-business-app”,
-storageBucket: “hagi-business-app.firebasestorage.app”,
-messagingSenderId: “499920576099”,
-appId: “1:499920576099:web:dbd294acbf9e7125eca256”
+  apiKey: "AIzaSyDk8hU_GYvI1FvuLjpUVdYtITZ2jomeDuo",
+  authDomain: "hagi-business-app.firebaseapp.com",
+  projectId: "hagi-business-app",
+  storageBucket: "hagi-business-app.firebasestorage.app",
+  messagingSenderId: "499920576099",
+  appId: "1:499920576099:web:dbd294acbf9e7125eca256"
 };
 firebase.initializeApp(firebaseConfig);
 const _auth = firebase.auth();
@@ -33,114 +71,73 @@ const _db   = firebase.firestore();
 window._currentUser = null;
 
 _auth.onAuthStateChanged(async (user) => {
-if (user) {
-window._currentUser = user;
-document.getElementById(‘auth-screen’).style.display = ‘none’;
-document.getElementById(‘app-wrap’).style.display    = ‘flex’;
-document.getElementById(‘user-display-name’).textContent = user.displayName || user.email.split(’@’)[0];
-document.getElementById(‘auth-email-header’).textContent = user.email;
-if (typeof window._loadFromFirestore === ‘function’) {
-await window._loadFromFirestore(user.uid);
-}
-} else {
-window._currentUser = null;
-document.getElementById(‘auth-screen’).style.display = ‘flex’;
-document.getElementById(‘app-wrap’).style.display    = ‘none’;
-}
+  if (user) {
+    window._currentUser = user;
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app-wrap').style.display    = 'flex';
+    document.getElementById('user-display-name').textContent = user.displayName || user.email.split('@')[0];
+    document.getElementById('auth-email-header').textContent = user.email;
+    if (typeof window._loadFromFirestore === 'function') {
+      await window._loadFromFirestore(user.uid);
+    }
+  } else {
+    window._currentUser = null;
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('app-wrap').style.display    = 'none';
+  }
 });
 
 window._doRegister = async () => {
-const email = document.getElementById(‘auth-email’).value.trim();
-const pass  = document.getElementById(‘auth-pass’).value;
-const name  = document.getElementById(‘auth-display-name’).value.trim() || email.split(’@’)[0];
-const err   = document.getElementById(‘auth-error’);
-err.textContent = ‘’;
-if (!email || !pass) { err.textContent = ‘請輸入信箱與密碼’; return; }
-if (pass.length < 6)  { err.textContent = ‘密碼至少 6 位’; return; }
-try {
-const cred = await _auth.createUserWithEmailAndPassword(email, pass);
-await cred.user.updateProfile({ displayName: name });
-await _db.collection(‘users’).doc(cred.user.uid).set({ userName: name, createdAt: new Date().toISOString() });
-} catch(e) { err.textContent = _authErrMsg(e.code); }
+  const email = document.getElementById('auth-email').value.trim();
+  const pass  = document.getElementById('auth-pass').value;
+  const name  = document.getElementById('auth-display-name').value.trim() || email.split('@')[0];
+  const err   = document.getElementById('auth-error');
+  err.textContent = '';
+  if (!email || !pass) { err.textContent = '請輸入信箱與密碼'; return; }
+  if (pass.length < 6)  { err.textContent = '密碼至少 6 位'; return; }
+  try {
+    const cred = await _auth.createUserWithEmailAndPassword(email, pass);
+    await cred.user.updateProfile({ displayName: name });
+    await _db.collection('users').doc(cred.user.uid).set({ userName: name, createdAt: new Date().toISOString() });
+  } catch(e) { err.textContent = _authErrMsg(e.code); }
 };
 
 window._doLogin = async () => {
-const email = document.getElementById(‘auth-email’).value.trim();
-const pass  = document.getElementById(‘auth-pass’).value;
-const err   = document.getElementById(‘auth-error’);
-err.textContent = ‘’;
-try {
-await _auth.signInWithEmailAndPassword(email, pass);
-} catch(e) { err.textContent = _authErrMsg(e.code); }
+  const email = document.getElementById('auth-email').value.trim();
+  const pass  = document.getElementById('auth-pass').value;
+  const err   = document.getElementById('auth-error');
+  err.textContent = '';
+  try {
+    await _auth.signInWithEmailAndPassword(email, pass);
+  } catch(e) { err.textContent = _authErrMsg(e.code); }
 };
 
 window._doLogout = async () => {
-if (!confirm(‘確定登出？’)) return;
-await _auth.signOut();
+  if (!confirm('確定登出？')) return;
+  await _auth.signOut();
 };
 
 window._doForgot = async () => {
-const email = document.getElementById(‘auth-email’).value.trim();
-const err = document.getElementById(‘auth-error’);
-if (!email) { err.textContent = ‘請先輸入信箱地址’; err.style.color = ‘#C05621’; return; }
-try {
-await _auth.sendPasswordResetEmail(email);
-err.style.color = ‘#276749’;
-err.textContent = ‘✅ 重設密碼信件已寄出，請查收信箱’;
-} catch(e) { err.style.color = ‘#C53030’; err.textContent = _authErrMsg(e.code); }
+  const email = document.getElementById('auth-email').value.trim();
+  const err = document.getElementById('auth-error');
+  if (!email) { err.textContent = '請先輸入信箱地址'; err.style.color = '#C05621'; return; }
+  try {
+    await _auth.sendPasswordResetEmail(email);
+    err.style.color = '#276749';
+    err.textContent = '✅ 重設密碼信件已寄出，請查收信箱';
+  } catch(e) { err.style.color = '#C53030'; err.textContent = _authErrMsg(e.code); }
 };
 
 } catch(e) {
-// Firebase failed to load — show error on screen
-document.addEventListener(‘DOMContentLoaded’, function() {
-var err = document.getElementById(‘auth-error’);
-if (err) { err.textContent = ‘Firebase 載入失敗：’ + e.message; err.style.color=’#C53030’; }
-});
-// provide stub so buttons don’t crash
-window._doRegister = window._doLogin = window._doLogout = window._doForgot = async function() {
-document.getElementById(‘auth-error’).textContent = ‘Firebase 尚未載入，請重新整理頁面’;
-};
-}
-
-function _authErrMsg(code) {
-const msgs = {
-‘auth/email-already-in-use’: ‘此信箱已被註冊’,
-‘auth/invalid-email’: ‘信箱格式不正確’,
-‘auth/wrong-password’: ‘密碼錯誤’,
-‘auth/user-not-found’: ‘找不到此帳號’,
-‘auth/weak-password’: ‘密碼強度不足（至少6位）’,
-‘auth/invalid-credential’: ‘信箱或密碼錯誤’,
-‘auth/too-many-requests’: ‘嘗試次數過多，請稍後再試’,
-‘auth/operation-not-allowed’: ‘請至 Firebase Console 開啟 Email/Password 登入’,
-‘auth/network-request-failed’: ‘網路連線失敗，請檢查網路’,
-};
-return msgs[code] || `錯誤（${code}）`;
-}
-
-let _authMode = ‘login’;
-window.switchAuthTab = function(mode) {
-_authMode = mode;
-document.getElementById(‘tab-login’).classList.toggle(‘on’, mode === ‘login’);
-document.getElementById(‘tab-register’).classList.toggle(‘on’, mode === ‘register’);
-document.getElementById(‘auth-register-fields’).style.display = mode === ‘register’ ? ‘flex’ : ‘none’;
-document.getElementById(‘auth-submit-btn’).textContent = mode === ‘register’ ? ‘✦ 建立帳號’ : ‘登入’;
-const err = document.getElementById(‘auth-error’);
-err.textContent = ‘’; err.style.color = ‘#C53030’;
-document.getElementById(‘forgot-link’).style.display = mode === ‘login’ ? ‘inline’ : ‘none’;
-};
-
-window._authSubmit = async function() {
-const btn = document.getElementById(‘auth-submit-btn’);
-btn.disabled = true;
-btn.textContent = ‘處理中…’;
-try {
-if (_authMode === ‘register’) await window._doRegister();
-else await window._doLogin();
-} finally {
-btn.disabled = false;
-btn.textContent = _authMode === ‘register’ ? ‘✦ 建立帳號’ : ‘登入’;
-}
-};
+  console.error('Firebase init error:', e);
+  document.addEventListener('DOMContentLoaded', function() {
+    var err = document.getElementById('auth-error');
+    if (err) { err.textContent = 'Firebase 載入失敗：' + e.message; err.style.color = '#C53030'; }
+  });
+  window._doRegister = window._doLogin = window._doLogout = window._doForgot = async function() {
+    document.getElementById('auth-error').textContent = 'Firebase 尚未載入，請重新整理頁面';
+  };
+} // end try-catch Firebase
 </script>
 
 <style>
