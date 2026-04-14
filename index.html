@@ -6,154 +6,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>事業藍圖｜Team+</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
-<!-- Auth UI — loaded BEFORE Firebase so buttons always work -->
-<script>
-var _authMode = 'login';
-
-function _authErrMsg(code) {
-var msgs = {
-‘auth/email-already-in-use’: ‘此信箱已被註冊’,
-‘auth/invalid-email’: ‘信箱格式不正確’,
-‘auth/wrong-password’: ‘密碼錯誤’,
-‘auth/user-not-found’: ‘找不到此帳號’,
-‘auth/weak-password’: ‘密碼強度不足（至少6位）’,
-‘auth/invalid-credential’: ‘信箱或密碼錯誤’,
-‘auth/too-many-requests’: ‘嘗試次數過多，請稍後再試’,
-‘auth/operation-not-allowed’: ‘請至 Firebase Console 開啟 Email/Password 登入’,
-‘auth/network-request-failed’: ‘網路連線失敗，請檢查網路’,
-};
-return msgs[code] || ‘錯誤（’ + code + ‘）’;
-}
-function switchAuthTab(mode) {
-_authMode = mode;
-var tabLogin    = document.getElementById(‘tab-login’);
-var tabRegister = document.getElementById(‘tab-register’);
-var regFields   = document.getElementById(‘auth-register-fields’);
-var submitBtn   = document.getElementById(‘auth-submit-btn’);
-var err         = document.getElementById(‘auth-error’);
-var forgotLink  = document.getElementById(‘forgot-link’);
-if (tabLogin)    tabLogin.classList.toggle(‘on’, mode === ‘login’);
-if (tabRegister) tabRegister.classList.toggle(‘on’, mode === ‘register’);
-if (regFields)   regFields.style.display = mode === ‘register’ ? ‘flex’ : ‘none’;
-if (submitBtn)   submitBtn.textContent   = mode === ‘register’ ? ‘✦ 建立帳號’ : ‘登入’;
-if (err)         { err.textContent = ‘’; err.style.color = ‘#C53030’; }
-if (forgotLink)  forgotLink.style.display = mode === ‘login’ ? ‘inline’ : ‘none’;
-}
-async function _authSubmit() {
-var btn = document.getElementById(‘auth-submit-btn’);
-if (btn) { btn.disabled = true; btn.textContent = ‘處理中…’; }
-try {
-if (_authMode === ‘register’ && window._doRegister) await window._doRegister();
-else if (window._doLogin) await window._doLogin();
-else { document.getElementById(‘auth-error’).textContent = ‘系統尚未就緒，請重新整理’; }
-} catch(e) {
-var err = document.getElementById(‘auth-error’);
-if (err) err.textContent = ‘錯誤：’ + e.message;
-} finally {
-if (btn) { btn.disabled = false; btn.textContent = _authMode === ‘register’ ? ‘✦ 建立帳號’ : ‘登入’; }
-}
-}
-</script>
-
-<!-- Firebase SDK -->
-
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-
-<script>
-// Show auth screen immediately so page is never blank
-document.addEventListener('DOMContentLoaded', function() {
-  var authScreen = document.getElementById('auth-screen');
-  if (authScreen) authScreen.style.display = 'flex';
-});
-
-try {
-const firebaseConfig = {
-  apiKey: "AIzaSyDk8hU_GYvI1FvuLjpUVdYtITZ2jomeDuo",
-  authDomain: "hagi-business-app.firebaseapp.com",
-  projectId: "hagi-business-app",
-  storageBucket: "hagi-business-app.firebasestorage.app",
-  messagingSenderId: "499920576099",
-  appId: "1:499920576099:web:dbd294acbf9e7125eca256"
-};
-firebase.initializeApp(firebaseConfig);
-const _auth = firebase.auth();
-const _db   = firebase.firestore();
-
-window._currentUser = null;
-
-_auth.onAuthStateChanged(async (user) => {
-  if (user) {
-    window._currentUser = user;
-    document.getElementById('auth-screen').style.display = 'none';
-    document.getElementById('app-wrap').style.display    = 'flex';
-    document.getElementById('user-display-name').textContent = user.displayName || user.email.split('@')[0];
-    document.getElementById('auth-email-header').textContent = user.email;
-    if (typeof window._loadFromFirestore === 'function') {
-      await window._loadFromFirestore(user.uid);
-    }
-  } else {
-    window._currentUser = null;
-    document.getElementById('auth-screen').style.display = 'flex';
-    document.getElementById('app-wrap').style.display    = 'none';
-  }
-});
-
-window._doRegister = async () => {
-  const email = document.getElementById('auth-email').value.trim();
-  const pass  = document.getElementById('auth-pass').value;
-  const name  = document.getElementById('auth-display-name').value.trim() || email.split('@')[0];
-  const err   = document.getElementById('auth-error');
-  err.textContent = '';
-  if (!email || !pass) { err.textContent = '請輸入信箱與密碼'; return; }
-  if (pass.length < 6)  { err.textContent = '密碼至少 6 位'; return; }
-  try {
-    const cred = await _auth.createUserWithEmailAndPassword(email, pass);
-    await cred.user.updateProfile({ displayName: name });
-    await _db.collection('users').doc(cred.user.uid).set({ userName: name, createdAt: new Date().toISOString() });
-  } catch(e) { err.textContent = _authErrMsg(e.code); }
-};
-
-window._doLogin = async () => {
-  const email = document.getElementById('auth-email').value.trim();
-  const pass  = document.getElementById('auth-pass').value;
-  const err   = document.getElementById('auth-error');
-  err.textContent = '';
-  try {
-    await _auth.signInWithEmailAndPassword(email, pass);
-  } catch(e) { err.textContent = _authErrMsg(e.code); }
-};
-
-window._doLogout = async () => {
-  if (!confirm('確定登出？')) return;
-  await _auth.signOut();
-};
-
-window._doForgot = async () => {
-  const email = document.getElementById('auth-email').value.trim();
-  const err = document.getElementById('auth-error');
-  if (!email) { err.textContent = '請先輸入信箱地址'; err.style.color = '#C05621'; return; }
-  try {
-    await _auth.sendPasswordResetEmail(email);
-    err.style.color = '#276749';
-    err.textContent = '✅ 重設密碼信件已寄出，請查收信箱';
-  } catch(e) { err.style.color = '#C53030'; err.textContent = _authErrMsg(e.code); }
-};
-
-} catch(e) {
-  console.error('Firebase init error:', e);
-  document.addEventListener('DOMContentLoaded', function() {
-    var err = document.getElementById('auth-error');
-    if (err) { err.textContent = 'Firebase 載入失敗：' + e.message; err.style.color = '#C53030'; }
-  });
-  window._doRegister = window._doLogin = window._doLogout = window._doForgot = async function() {
-    document.getElementById('auth-error').textContent = 'Firebase 尚未載入，請重新整理頁面';
-  };
-} // end try-catch Firebase
-</script>
 
 <style>
   :root {
@@ -397,28 +249,7 @@ window._doForgot = async () => {
   .mt-drag { color: var(--gray-400); font-size: 16px; cursor: grab; flex-shrink: 0; }
   .mt-input { flex: 1; padding: 7px 10px; font-size: 13px; }
 
-  /* ── AUTH SCREEN ── */
-  #auth-screen { position:fixed;inset:0;z-index:999;background:linear-gradient(135deg,var(--purple-dark) 0%,var(--purple-deep) 50%,var(--purple-mid) 100%);display:flex;align-items:center;justify-content:center;padding:20px; }
-  .auth-box { background:white;border-radius:20px;padding:32px 28px;max-width:380px;width:100%;box-shadow:0 32px 80px rgba(44,24,80,.35); }
-  .auth-logo { text-align:center;margin-bottom:24px; }
-  .auth-gem { width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,var(--purple-deep),var(--purple-mid));display:inline-flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:10px;box-shadow:0 8px 24px rgba(107,70,193,.4); }
-  .auth-title { font-size:18px;font-weight:900;color:var(--purple-dark);margin-bottom:2px; }
-  .auth-sub { font-size:12px;color:var(--purple-mid);font-weight:500; }
-  .auth-tabs { display:flex;background:var(--gray-100);border-radius:10px;padding:3px;margin-bottom:20px; }
-  .auth-tab { flex:1;padding:7px;border-radius:8px;border:none;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:var(--tr);background:transparent;color:var(--gray-400); }
-  .auth-tab.on { background:white;color:var(--purple-deep);box-shadow:0 1px 4px rgba(107,70,193,.15); }
-  .auth-fg { display:flex;flex-direction:column;gap:4px;margin-bottom:12px; }
-  .auth-fg label { font-size:11px;font-weight:700;color:var(--gray-600); }
-  .auth-error { font-size:12px;color:#C53030;font-weight:600;min-height:18px;margin-bottom:8px;text-align:center; }
-  #auth-register-fields { display:none; }
-
-  /* ── HEADER AUTH INFO ── */
-  .header-user-info { display:flex;align-items:center;gap:8px;flex-shrink:0; }
-  .logout-btn { padding:5px 10px;border-radius:8px;border:1.5px solid var(--purple-light);background:transparent;color:var(--purple-deep);font-size:11px;font-weight:700;cursor:pointer;transition:var(--tr); }
-  .logout-btn:hover { background:var(--purple-pale); }
-
-  /* ── LOADING OVERLAY ── */
-  #loading-overlay { position:fixed;inset:0;z-index:500;background:rgba(255,255,255,.85);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px; }
+  
   #loading-overlay.on { display:flex; }
   .spinner { width:36px;height:36px;border:3px solid var(--purple-light);border-top-color:var(--purple-deep);border-radius:50%;animation:spin .7s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
@@ -439,49 +270,42 @@ window._doForgot = async () => {
 </head>
 <body>
 
-<!-- ── AUTH SCREEN ── -->
+```
+  <div class="auth-title">事業藍圖｜Team+</div>
+  <div class="auth-sub">Personal Business Blueprint</div>
+</div>
+<div class="auth-tabs">
+  <button class="auth-tab on" id="tab-login" onclick="switchAuthTab('login')">登入</button>
+  <button class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">註冊新帳號</button>
+</div>
+<div id="auth-register-fields" class="auth-fg">
+  <label>你的名稱（顯示用）</label>
+  <input id="auth-display-name" placeholder="例：卓依、Zoe" style="margin-bottom:0">
+</div>
+<div class="auth-fg">
+  <label>電子信箱</label>
+  <input type="email" id="auth-email" placeholder="your@email.com" style="margin-bottom:0" onkeydown="if(event.key==='Enter')document.getElementById('auth-pass').focus()">
+</div>
+<div class="auth-fg">
+  <label>密碼（至少6位）</label>
+  <input type="password" id="auth-pass" placeholder="••••••" style="margin-bottom:0" onkeydown="if(event.key==='Enter')_authSubmit()">
+</div>
+<div class="auth-error" id="auth-error"></div>
+<button class="btn btn-primary" id="auth-submit-btn" onclick="_authSubmit()" style="width:100%;justify-content:center;padding:11px">登入</button>
+<div style="text-align:center;margin-top:12px;font-size:12px;color:var(--gray-400)">
+  <span id="forgot-link" style="cursor:pointer;color:var(--purple-mid);font-weight:600" onclick="window._doForgot && window._doForgot()">忘記密碼？</span>
+</div>
+```
 
-<div id="auth-screen" style="display:flex">
-  <div class="auth-box">
-    <div class="auth-logo">
-      <div class="auth-gem">✦</div>
-      <div class="auth-title">事業藍圖｜Team+</div>
-      <div class="auth-sub">Personal Business Blueprint</div>
-    </div>
-    <div class="auth-tabs">
-      <button class="auth-tab on" id="tab-login" onclick="switchAuthTab('login')">登入</button>
-      <button class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">註冊新帳號</button>
-    </div>
-    <div id="auth-register-fields" class="auth-fg">
-      <label>你的名稱（顯示用）</label>
-      <input id="auth-display-name" placeholder="例：卓依、Zoe" style="margin-bottom:0">
-    </div>
-    <div class="auth-fg">
-      <label>電子信箱</label>
-      <input type="email" id="auth-email" placeholder="your@email.com" style="margin-bottom:0" onkeydown="if(event.key==='Enter')document.getElementById('auth-pass').focus()">
-    </div>
-    <div class="auth-fg">
-      <label>密碼（至少6位）</label>
-      <input type="password" id="auth-pass" placeholder="••••••" style="margin-bottom:0" onkeydown="if(event.key==='Enter')_authSubmit()">
-    </div>
-    <div class="auth-error" id="auth-error"></div>
-    <button class="btn btn-primary" id="auth-submit-btn" onclick="_authSubmit()" style="width:100%;justify-content:center;padding:11px">登入</button>
-    <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--gray-400)">
-      <span id="forgot-link" style="cursor:pointer;color:var(--purple-mid);font-weight:600" onclick="window._doForgot && window._doForgot()">忘記密碼？</span>
-    </div>
   </div>
 </div>
 
-<!-- ── LOADING OVERLAY ── -->
-
-<div id="loading-overlay">
-  <div class="spinner"></div>
   <div style="font-size:13px;font-weight:700;color:var(--purple-deep)">載入資料中...</div>
 </div>
 
 <!-- ── APP WRAP ── -->
 
-<div id="app-wrap" style="display:none;flex-direction:column;min-height:100vh">
+<div style="display:flex;flex-direction:column;min-height:100vh">
 
 <!-- HEADER -->
 
@@ -501,13 +325,9 @@ window._doForgot = async () => {
       <button class="nav-btn" onclick="showPage('plan100')" id="nav-plan100">🏆 長客計畫</button>
       <button class="nav-btn" onclick="showPage('plan60')" id="nav-plan60">🚀 60天計畫</button>
     </nav>
-    <div class="header-user-info">
-      <div class="founder-chip" onclick="openUserNameModal()" title="點擊修改名稱" style="cursor:pointer">
-        👑 <span id="user-display-name">我的名稱</span>
-        <span style="font-size:10px;opacity:.6;margin-left:2px">✎</span>
-      </div>
-      <div style="font-size:10px;color:var(--gray-400);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="auth-email-header"></div>
-      <button class="logout-btn" onclick="_doLogout()">登出</button>
+        <div class="founder-chip" onclick="openUserNameModal()" title="點擊修改名稱" style="cursor:pointer">
+      👑 <span id="user-display-name">我的名稱</span>
+      <span style="font-size:10px;opacity:.6;margin-left:2px">✎</span>
     </div>
   </div>
 </header>
@@ -1102,32 +922,64 @@ window._doForgot = async () => {
 
 <script>
 // ════════════════════════════════
+// LOCAL STORAGE — save / load
+// ════════════════════════════════
+function showLoading(on) {}
+
+function fsSet(col, id, data) {
+  try {
+    const all = JSON.parse(localStorage.getItem('tplus_' + col) || '[]');
+    const idx = all.findIndex(x => String(x.id) === String(id));
+    const clean = JSON.parse(JSON.stringify(data));
+    if (idx >= 0) all[idx] = clean; else all.push(clean);
+    localStorage.setItem('tplus_' + col, JSON.stringify(all));
+  } catch(e) { console.warn('save error', e); }
+}
+function fsDel(col, id) {
+  try {
+    const all = JSON.parse(localStorage.getItem('tplus_' + col) || '[]');
+    localStorage.setItem('tplus_' + col, JSON.stringify(all.filter(x => String(x.id) !== String(id))));
+  } catch(e) {}
+}
+function fsSetProfile(data) {
+  try {
+    const p = JSON.parse(localStorage.getItem('tplus_profile') || '{}');
+    localStorage.setItem('tplus_profile', JSON.stringify({...p, ...data}));
+  } catch(e) {}
+}
+function loadFromLocalStorage() {
+  try {
+    const p = JSON.parse(localStorage.getItem('tplus_profile') || '{}');
+    if (p.userName)     { state.userName = p.userName; const el = document.getElementById('user-display-name'); if(el) el.textContent = p.userName; }
+    if (p.orgBase)      state.orgBase = p.orgBase;
+    if (p.meetingTypes) meetingTypes = p.meetingTypes;
+    if (p.goalPV)       { const el = document.getElementById('goal-pv');    if(el) el.value = p.goalPV; }
+    if (p.goalBV)       { const el = document.getElementById('goal-bv');    if(el) el.value = p.goalBV; }
+    if (p.currentPV)    { const el = document.getElementById('current-pv'); if(el) el.value = p.currentPV; }
+    if (p.currentBV)    { const el = document.getElementById('current-bv'); if(el) el.value = p.currentBV; }
+    ['leads','customers','pipeline','plan100','plan60','orgLog','monthlySnapshots','orgAlbum'].forEach(col => {
+      const saved = localStorage.getItem('tplus_' + col);
+      if (saved) state[col] = JSON.parse(saved);
+    });
+  } catch(e) { console.warn('load error', e); }
+}
+
+// ════════════════════════════════
 // STATE
 // ════════════════════════════════
 const state = {
-  leads: [],
-  customers: [],
-  pipeline: [],     // A名單跟進 { id, name, age, job, icebreak, d336, dcomp, dprod, planLearn, planProd, planGoal, notebook, followups[] }
-  plan100: [],
-  monthlySnapshots: [],
-  orgLog: [],       // { id, count, note, ym, ts }
-  orgBase: 0,       // 手動設定的初始總人數基準
-  orgAlbum: [],     // { id, dataUrl, name }
-  userName: '我的名稱',
-  plan60: [],       // { id, name, no, start, note, images[] }
-  editingId: null,
+  leads: [], customers: [], pipeline: [], plan100: [],
+  monthlySnapshots: [], orgLog: [], orgBase: 0,
+  orgAlbum: [], userName: '我的名稱', plan60: [], editingId: null,
 };
 const NOW = new Date();
 const currentMonth = NOW.getMonth() + 1;
-const currentYear = NOW.getFullYear();
-const currentYM = `${currentYear}-${String(currentMonth).padStart(2,'0')}`;
+const currentYear  = NOW.getFullYear();
+const currentYM    = `${currentYear}-${String(currentMonth).padStart(2,'0')}`;
+let histYM = currentYM;
 
-// History navigation state
-let histYM = currentYM; // 'YYYY-MM'
-
-// ── ID helper: always compare as strings ──
 const sid = id => String(id);
-const findById  = (arr, id) => arr.find(x => sid(x.id) === sid(id));
+const findById    = (arr, id) => arr.find(x => sid(x.id) === sid(id));
 const findIdxById = (arr, id) => arr.findIndex(x => sid(x.id) === sid(id));
 const filterById  = (arr, id) => arr.filter(x => sid(x.id) !== sid(id));
 
@@ -1145,7 +997,6 @@ function showPage(p) {
   if (p === 'plan100') renderPlan100();
   if (p === 'plan60') renderPlan60();
 }
-
 function showSubTab(tab) {
   ['leads','pipeline','customers'].forEach(t => {
     const el = document.getElementById('subtab-' + t);
@@ -1155,10 +1006,6 @@ function showSubTab(tab) {
   });
   if (tab === 'pipeline') renderPipeline();
 }
-
-// ════════════════════════════════
-// MODALS
-// ════════════════════════════════
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-overlay').forEach(m => {
@@ -1166,17 +1013,38 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 });
 
 // ════════════════════════════════
+// USERNAME
+// ════════════════════════════════
+function openUserNameModal() {
+  document.getElementById('username-input').value = state.userName;
+  openModal('username-modal');
+  setTimeout(() => document.getElementById('username-input').select(), 100);
+}
+function saveUserName() {
+  const val = document.getElementById('username-input').value.trim();
+  if (!val) return;
+  state.userName = val;
+  document.getElementById('user-display-name').textContent = val;
+  fsSetProfile({ userName: val });
+  closeModal('username-modal');
+}
+
+// ════════════════════════════════
 // LEADS
 // ════════════════════════════════
+function leadIsThisMonth(l) {
+  if (!l.date) return false;
+  const d = new Date(l.date);
+  return d.getMonth()+1 === currentMonth && d.getFullYear() === currentYear;
+}
 function openLeadModal(id) {
   state.editingId = id || null;
-  const l = id ? state.leads.find(x => String(x.id) === String(id)) : null;
+  const l = id ? findById(state.leads, id) : null;
   document.getElementById('lead-modal-title').textContent = id ? '編輯名單' : '新增開發名單';
   document.getElementById('lead-referrer').value = l?.referrer || '';
   document.getElementById('lead-name').value = l?.name || '';
   document.getElementById('lead-gender').value = l?.gender || '';
   document.getElementById('lead-job').value = l?.job || '';
-  document.getElementById('lead-meeting').value = l?.meeting || '';
   document.getElementById('lead-date').value = l?.date || '';
   document.getElementById('lead-ab').value = l?.ab || 'B';
   document.getElementById('lead-nextstep').value = l?.nextstep || '';
@@ -1214,7 +1082,7 @@ function deleteLead(id) {
 function syncLeadToPipeline(name, data) {
   if (state.pipeline.some(p => p.name === name)) return;
   const newId = (Date.now()+1).toString();
-  const rec = { id: newId, name, age: '', job: data.job||'', icebreak: false, d336:'', dcomp:'', dprod:'', planLearn:'', planProd:'', planGoal:'', notebook:'', followups:[] };
+  const rec = { id: newId, name, age:'', job: data.job||'', icebreak:false, d336:'', dcomp:'', dprod:'', planLearn:'', planProd:'', planGoal:'', notebook:'', followups:[] };
   state.pipeline.push(rec);
   fsSet('pipeline', newId, rec);
 }
@@ -1223,936 +1091,6 @@ function removeFromPipeline(name) {
   if (p) fsDel('pipeline', p.id);
   state.pipeline = state.pipeline.filter(p => p.name !== name);
 }
-function clearLeadSearch() {
-  document.getElementById('lead-search-name').value = '';
-  document.getElementById('lead-search-referrer').value = '';
-  document.getElementById('lead-search-ab').value = '';
-  document.getElementById('lead-search-month').value = '';
-  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-  renderLeads();
-}
-function quickLeadFilter(type) {
-  clearLeadSearch();
-  if (type === 'A') { document.getElementById('lead-search-ab').value = 'A'; }
-  if (type === 'B') { document.getElementById('lead-search-ab').value = 'B'; }
-  if (type === 'thismonth') { document.getElementById('lead-search-month').value = String(currentMonth); }
-  renderLeads();
-}
-function clearCLeads() {
-  const cLeads = state.leads.filter(l => l.ab === 'C' && leadIsThisMonth(l));
-  if (!cLeads.length) { alert('本月沒有 C 名單可清除'); return; }
-  if (!confirm(`確定清除本月 ${cLeads.length} 筆 C 名單？（A、B 名單不受影響）`)) return;
-  cLeads.forEach(l => fsDel('leads', l.id));
-  state.leads = state.leads.filter(l => !(l.ab === 'C' && leadIsThisMonth(l)));
-  renderLeads(); updateDashboard();
-}
-function leadIsThisMonth(l) {
-  if (!l.date) return false;
-  const d = new Date(l.date);
-  return d.getMonth() + 1 === currentMonth && d.getFullYear() === currentYear;
-}
-function renderLeads() {
-  const qName     = (document.getElementById('lead-search-name')?.value || '').toLowerCase().trim();
-  const qReferrer = (document.getElementById('lead-search-referrer')?.value || '').toLowerCase().trim();
-  const qAB       = document.getElementById('lead-search-ab')?.value || '';
-  const qMonth    = document.getElementById('lead-search-month')?.value || '';
-
-  let list = state.leads;
-  if (qName)     list = list.filter(l => l.name.toLowerCase().includes(qName));
-  if (qReferrer) list = list.filter(l => (l.referrer||'').toLowerCase().includes(qReferrer));
-  if (qAB)       list = list.filter(l => l.ab === qAB);
-  if (qMonth)    list = list.filter(l => {
-    if (!l.date) return false;
-    const d = new Date(l.date);
-    return String(d.getMonth() + 1) === qMonth;
-  });
-
-  const tbody = document.getElementById('leads-tbody');
-  tbody.innerHTML = '';
-  const isEmpty   = state.leads.length === 0;
-  const noResult  = !isEmpty && list.length === 0;
-  document.getElementById('leads-empty').style.display    = isEmpty   ? 'block' : 'none';
-  document.getElementById('leads-no-result').style.display = noResult ? 'block' : 'none';
-
-  const countEl = document.getElementById('lead-result-count');
-  if (countEl) {
-    const hasFilter = qName || qReferrer || qAB || qMonth;
-    const cCount = state.leads.filter(l => l.ab === 'C' && leadIsThisMonth(l)).length;
-    countEl.innerHTML = (hasFilter ? `找到 ${list.length} 筆（共 ${state.leads.length} 人）` : `共 ${state.leads.length} 人`)
-      + (cCount ? `　<span style="color:#92400E;font-weight:700">⚠ 本月C名單 ${cCount} 筆可清除</span>` : '');
-  }
-
-  const tagClass = { A: 'tag-a', B: 'tag-b', C: 'tag-c' };
-  list.forEach(l => {
-    const lid = String(l.id);
-    const hn = qName ? l.name.replace(new RegExp(qName,'gi'), m=>`<mark style="background:var(--purple-light);border-radius:3px;padding:0 2px">${m}</mark>`) : l.name;
-    const hr = qReferrer && l.referrer ? l.referrer.replace(new RegExp(qReferrer,'gi'), m=>`<mark style="background:var(--purple-light);border-radius:3px;padding:0 2px">${m}</mark>`) : (l.referrer||'—');
-    const isC = l.ab === 'C';
-    const tr = document.createElement('tr');
-    if (isC) tr.style.opacity = '0.72';
-    tr.innerHTML = `
-      <td style="color:var(--purple-mid);font-size:12px">${hr}</td>
-      <td><strong>${hn}</strong></td>
-      <td>${l.gender||'—'}</td>
-      <td>${l.job||'—'}</td>
-      <td><button class="btn btn-outline btn-sm btn-icon" onclick="openLeadProfile('${lid}')" title="查看備註" style="font-size:14px">📝</button>${l.profile?.extra?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--purple-mid);margin-left:4px;vertical-align:middle"></span>':''}</td>
-      <td>${l.meeting||'—'}</td>
-      <td>${l.date||'—'}</td>
-      <td><span class="tag ${tagClass[l.ab]||'tag-b'}">${l.ab}</span></td>
-      <td style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.nextstep||'—'}</td>
-      <td><div style="display:flex;gap:4px">
-        <button class="btn btn-outline btn-sm btn-icon" onclick="openLeadModal('${lid}')">✏️</button>
-        <button class="btn btn-danger btn-sm btn-icon" onclick="deleteLead('${lid}')">🗑️</button>
-      </div></td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-// ════════════════════════════════
-// PIPELINE (A名單跟進)
-// ════════════════════════════════
-let nbEditingId = null;
-let nbTempFollowups = [];
-
-function openPipeModal(id) {
-  state.editingId = id || null;
-  const p = id ? findById(state.pipeline, id) : null;
-  document.getElementById('pipe-modal-title').textContent = id ? '編輯A名單成員' : '新增 A 名單成員';
-  document.getElementById('pipe-name').value = p?.name || '';
-  document.getElementById('pipe-age').value  = p?.age  || '';
-  document.getElementById('pipe-job').value  = p?.job  || '';
-  openModal('pipe-modal');
-}
-function savePipe() {
-  const name = document.getElementById('pipe-name').value.trim();
-  if (!name) { alert('請輸入姓名'); return; }
-  const data = { name, age: document.getElementById('pipe-age').value, job: document.getElementById('pipe-job').value };
-  if (state.editingId) {
-    const i = findIdxById(state.pipeline, state.editingId);
-    state.pipeline[i] = { ...state.pipeline[i], ...data };
-    fsSet('pipeline', state.editingId, state.pipeline[i]);
-  } else {
-    const newId = Date.now().toString();
-    const rec = { id: newId, icebreak: false, d336:'', dcomp:'', dprod:'', planLearn:'', planProd:'', planGoal:'', notebook:'', followups:[], ...data };
-    state.pipeline.push(rec);
-    fsSet('pipeline', newId, rec);
-  }
-  closeModal('pipe-modal'); renderPipeline();
-}
-function deletePipe(id) {
-  if (!confirm('確定刪除？')) return;
-  state.pipeline = filterById(state.pipeline, id);
-  fsDel('pipeline', id);
-  renderPipeline();
-}
-function togglePipe(id) {
-  const p = findById(state.pipeline, id);
-  if (p) { p.icebreak = !p.icebreak; fsSet('pipeline', id, p); updateSummaryBar(); }
-}
-function toggleExpand(id) {
-  const card = document.getElementById('pcard-' + id);
-  if (card) card.classList.toggle('expanded');
-}
-function setPipeDate(id, field, val) {
-  const p = findById(state.pipeline, id);
-  if (!p) return;
-  p[field] = val;
-  fsSet('pipeline', id, p);
-  const card = document.getElementById('pcard-' + id);
-  if (card) {
-    const allPlans = p.planLearn && p.planProd && p.planGoal;
-    card.classList.toggle('glow', allPlans);
-  }
-}
-function openNotebook(id) {
-  nbEditingId = id;
-  const p = findById(state.pipeline, id);
-  document.getElementById('nb-person-name').textContent = p?.name || '';
-  document.getElementById('nb-dream').value = p?.notebook || '';
-  nbTempFollowups = [...(p?.followups || [])];
-  renderFollowupList();
-  document.getElementById('nb-fu-date').value = new Date().toISOString().slice(0,10);
-  document.getElementById('nb-fu-text').value = '';
-  openModal('notebook-modal');
-}
-function addFollowup() {
-  const date = document.getElementById('nb-fu-date').value;
-  const text = document.getElementById('nb-fu-text').value.trim();
-  if (!text) { document.getElementById('nb-fu-text').focus(); return; }
-  nbTempFollowups.push({ id: Date.now(), date, text });
-  document.getElementById('nb-fu-text').value = '';
-  renderFollowupList();
-}
-function removeFollowup(id) {
-  nbTempFollowups = nbTempFollowups.filter(x => x.id !== id);
-  renderFollowupList();
-}
-function renderFollowupList() {
-  const el = document.getElementById('nb-followup-list');
-  if (!nbTempFollowups.length) { el.innerHTML = '<div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">尚未新增跟進記錄</div>'; return; }
-  el.innerHTML = [...nbTempFollowups].reverse().map(f => `
-    <div class="followup-item">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
-          <div class="followup-date">${f.date || '—'}</div>
-          <div class="followup-text">${f.text}</div>
-        </div>
-        <button onclick="removeFollowup(${f.id})" style="background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:14px;padding:0 0 0 8px">✕</button>
-      </div>
-    </div>`).join('');
-}
-function saveNotebook() {
-  const p = findById(state.pipeline, nbEditingId);
-  if (!p) return;
-  p.notebook = document.getElementById('nb-dream').value;
-  p.followups = [...nbTempFollowups];
-  fsSet('pipeline', nbEditingId, p);
-  closeModal('notebook-modal');
-  renderPipeline();
-}
-function renderPipeline() {
-  const list = document.getElementById('pipeline-list');
-  const empty = document.getElementById('pipeline-empty');
-  if (!state.pipeline.length) {
-    list.style.display = 'none'; empty.style.display = 'block'; return;
-  }
-  list.style.display = 'flex'; empty.style.display = 'none';
-  list.innerHTML = state.pipeline.map(p => {
-    const pid = String(p.id);
-    const allPlans = p.planLearn && p.planProd && p.planGoal;
-    const hasNotes = p.notebook || (p.followups && p.followups.length);
-    const mkDate = (field, label) => `
-      <div class="date-node">
-        <div class="date-node-lbl">${label}</div>
-        <input type="date" class="date-input-mini${p[field]?' filled':''}" value="${p[field]||''}"
-          onchange="setPipeDate('${pid}','${field}',this.value);this.classList.toggle('filled',!!this.value)">
-      </div>`;
-    return `
-    <div class="pipe-card${allPlans?' glow':''}" id="pcard-${pid}">
-      <div class="pipe-head" onclick="toggleExpand('${pid}')">
-        <div>
-          <div class="pipe-name">
-            ${p.name}
-            ${hasNotes ? '<span style="font-size:12px;opacity:.7;margin-left:6px">📝</span>' : ''}
-          </div>
-          <div class="pipe-meta">${p.age ? p.age+'歲　' : ''}${p.job||'未填職業'}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <label class="toggle-wrap" onclick="event.stopPropagation()">
-            <input type="checkbox" ${p.icebreak?'checked':''} onchange="togglePipe('${pid}')">
-            <span class="tog-track"></span>
-            <span class="tog-label" style="color:${p.icebreak?'#D6BCFA':'rgba(255,255,255,.5)'}">${p.icebreak?'O':'X'}</span>
-          </label>
-          <span style="font-size:11px;opacity:.6">▾ 展開</span>
-        </div>
-      </div>
-      <div class="pipe-body">
-        <div style="font-size:10px;font-weight:800;color:var(--purple-mid);letter-spacing:.07em;margin-bottom:8px">📅 事業進度節點</div>
-        <div class="nodes-grid" style="margin-bottom:12px">
-          ${mkDate('d336','336 制度說明')}
-          ${mkDate('dcomp','公司介紹')}
-          ${mkDate('dprod','產品示範')}
-        </div>
-        <div class="section-divider"></div>
-        <div style="font-size:10px;font-weight:800;color:var(--purple-mid);letter-spacing:.07em;margin-bottom:8px;margin-top:10px">🚀 三個計畫啟動日期${allPlans?' <span style=\\"color:#68D391\\">✓ 全部完成</span>':''}</div>
-        <div class="plans-grid" style="margin-bottom:14px">
-          ${mkDate('planLearn','學習計畫')}
-          ${mkDate('planProd','產品計畫')}
-          ${mkDate('planGoal','目標計畫')}
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-outline btn-sm" onclick="openNotebook('${pid}')">💜 心靈筆記本${hasNotes?' ●':''}</button>
-          <button class="btn btn-outline btn-sm" onclick="openPipeModal('${pid}')">✏️ 編輯</button>
-          <button class="btn btn-danger btn-sm" onclick="deletePipe('${pid}')">🗑️ 刪除</button>
-        </div>
-        ${p.followups?.length ? `
-        <div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--purple-light)">
-          <div style="font-size:10px;font-weight:800;color:var(--purple-mid);margin-bottom:7px;letter-spacing:.05em">最近跟進</div>
-          ${[...p.followups].slice(-2).reverse().map(f=>`<div class="followup-item"><div class="followup-date">${f.date||'—'}</div><div class="followup-text">${f.text}</div></div>`).join('')}
-        </div>` : ''}
-      </div>
-    </div>`;
-  }).join('');
-}
-function updateSummaryBar() {
-  // keep summary chips updated when icebreak toggles
-  updateDashboard();
-}
-
-// ════════════════════════════════
-// CUSTOMERS
-// ════════════════════════════════
-function updateCommOptStyle() {
-  const val = document.querySelector('input[name="cust-comm"]:checked')?.value || 'none';
-  ['none','success','follow'].forEach(v => {
-    const el = document.getElementById('comm-opt-' + v);
-    if (!el) return;
-    el.style.border = v === val ? '2px solid var(--purple-deep)' : '2px solid var(--gray-200)';
-    el.style.background = v === val ? 'var(--purple-pale)' : 'var(--white)';
-  });
-  // Toggle field visibility
-  const fd = id => { const e = document.getElementById(id); if(e) e.style.display = 'block'; };
-  const hd = id => { const e = document.getElementById(id); if(e) e.style.display = 'none'; };
-  if (val === 'none')    { fd('field-commdate'); hd('field-buydate'); hd('field-repurchase'); hd('field-reason'); hd('field-nextdate'); }
-  if (val === 'success') { hd('field-commdate'); fd('field-buydate'); fd('field-repurchase'); hd('field-reason'); hd('field-nextdate'); }
-  if (val === 'follow')  { fd('field-commdate'); hd('field-buydate'); hd('field-repurchase'); fd('field-reason'); fd('field-nextdate'); }
-}
-function openCustomerModal(id) {
-  state.editingId = id || null;
-  const c = id ? findById(state.customers, id) : null;
-  document.getElementById('customer-modal-title').textContent = id ? '編輯顧客' : '新增顧客';
-  document.getElementById('cust-name').value = c?.name || '';
-  document.getElementById('cust-product').value = c?.product || '';
-  document.getElementById('cust-bv').value = c?.bv || '';
-  document.getElementById('cust-comm-date').value = c?.commDate || '';
-  document.getElementById('cust-buydate').value = c?.buydate || '';
-  document.getElementById('cust-repurchase-month').value = c?.repurchaseMonth || '';
-  document.getElementById('cust-comm-reason').value = c?.commReason || '';
-  document.getElementById('cust-comm-nextdate').value = c?.commNextDate || '';
-  const commVal = c?.commStatus || 'none';
-  document.querySelectorAll('input[name="cust-comm"]').forEach(r => { r.checked = r.value === commVal; });
-  updateCommOptStyle();
-  openModal('customer-modal');
-}
-function saveCustomer() {
-  const name = document.getElementById('cust-name').value.trim();
-  if (!name) { alert('請輸入姓名'); return; }
-  const commStatus = document.querySelector('input[name="cust-comm"]:checked')?.value || 'none';
-  const data = { name, product: document.getElementById('cust-product').value, bv: parseFloat(document.getElementById('cust-bv').value)||0, commStatus, commDate: commStatus!=='success'?document.getElementById('cust-comm-date').value:'', buydate: commStatus==='success'?document.getElementById('cust-buydate').value:'', repurchaseMonth: commStatus==='success'?document.getElementById('cust-repurchase-month').value:'', commReason: commStatus==='follow'?document.getElementById('cust-comm-reason').value:'', commNextDate: commStatus==='follow'?document.getElementById('cust-comm-nextdate').value:'' };
-  if (state.editingId) {
-    const i = findIdxById(state.customers, state.editingId);
-    state.customers[i] = { ...state.customers[i], ...data };
-    fsSet('customers', state.editingId, state.customers[i]);
-  } else {
-    const newId = Date.now().toString();
-    state.customers.push({ id: newId, ...data });
-    fsSet('customers', newId, { id: newId, ...data });
-  }
-  closeModal('customer-modal'); renderCustomers(); updateDashboard();
-}
-function deleteCustomer(id) {
-  if (!confirm('確定刪除？')) return;
-  state.customers = filterById(state.customers, id);
-  fsDel('customers', id);
-  renderCustomers(); updateDashboard();
-}
-function clearCustSearch() {
-  document.getElementById('cust-search-name').value = '';
-  document.getElementById('cust-search-product').value = '';
-  document.getElementById('cust-search-month').value = '';
-  document.getElementById('cust-search-status').value = '';
-  renderCustomers();
-}
-function quickFilter(type) {
-  clearCustSearch();
-  if (type === 'month')  document.getElementById('cust-search-month').value = String(currentMonth);
-  if (type === 'follow') document.getElementById('cust-search-status').value = 'follow';
-  renderCustomers();
-}
-function renderCustomers() {
-  const qName    = (document.getElementById('cust-search-name')?.value || '').toLowerCase().trim();
-  const qProduct = (document.getElementById('cust-search-product')?.value || '').toLowerCase().trim();
-  const qMonth   = document.getElementById('cust-search-month')?.value || '';
-  const qStatus  = document.getElementById('cust-search-status')?.value || '';
-
-  let list = state.customers;
-  if (qName)    list = list.filter(c => c.name.toLowerCase().includes(qName));
-  if (qProduct) list = list.filter(c => (c.product||'').toLowerCase().includes(qProduct));
-  if (qMonth)   list = list.filter(c => String(c.repurchaseMonth) === qMonth);
-  if (qStatus)  list = list.filter(c => (c.commStatus||'none') === qStatus);
-
-  const wrap = document.getElementById('customers-cards');
-  wrap.innerHTML = '';
-  const isEmpty  = state.customers.length === 0;
-  const noResult = !isEmpty && list.length === 0;
-  document.getElementById('customers-empty').style.display     = isEmpty   ? 'block' : 'none';
-  document.getElementById('customers-no-result').style.display = noResult  ? 'block' : 'none';
-
-  const countEl = document.getElementById('cust-result-count');
-  if (countEl) {
-    const hasFilter = qName || qProduct || qMonth || qStatus;
-    const followCount = state.customers.filter(c => c.commStatus === 'follow').length;
-    countEl.innerHTML = (hasFilter ? `找到 ${list.length} 筆（共 ${state.customers.length} 位）` : `共 ${state.customers.length} 位顧客`)
-      + (followCount ? `　<span style="color:#92400E;font-weight:700">△ 還需跟進 ${followCount} 位</span>` : '');
-  }
-
-  // Sort: follow first, then none, then success
-  const order = { follow: 0, none: 1, success: 2 };
-  list = [...list].sort((a,b) => (order[a.commStatus||'none']||1) - (order[b.commStatus||'none']||1));
-
-  list.forEach(c => {
-    const cs = c.commStatus || 'none';
-    const hn = qName ? c.name.replace(new RegExp(qName,'gi'), m=>`<mark style="background:var(--purple-light);border-radius:3px;padding:0 2px">${m}</mark>`) : c.name;
-    const hp = qProduct ? (c.product||'').replace(new RegExp(qProduct,'gi'), m=>`<mark style="background:var(--purple-light);border-radius:3px;padding:0 2px">${m}</mark>`) : (c.product||'');
-    const isRepurchaseMonth = parseInt(c.repurchaseMonth) === currentMonth;
-
-    const badge = cs === 'success'
-      ? '<span class="comm-badge success">✅ 已成交</span>'
-      : cs === 'follow'
-        ? '<span class="comm-badge follow">△ 還需跟進</span>'
-        : '<span class="comm-badge none">— 未溝通</span>';
-
-    // Fields per status
-    let fields = '';
-    if (cs === 'none') {
-      fields = `
-        ${hp ? `<span>🛍 ${hp}</span>` : ''}
-        ${c.bv ? `<span>BV：${c.bv}</span>` : ''}
-        ${c.commDate ? `<span>📅 溝通日期：${c.commDate}</span>` : ''}`;
-    } else if (cs === 'success') {
-      fields = `
-        ${hp ? `<span>🛍 ${hp}</span>` : ''}
-        ${c.bv ? `<span>BV：${c.bv}</span>` : ''}
-        ${c.buydate ? `<span>📅 購買日：${c.buydate}</span>` : ''}
-        ${c.repurchaseMonth ? `<span>🔄 回購月：${c.repurchaseMonth}月${isRepurchaseMonth ? ' 🔔' : ''}</span>` : ''}`;
-    } else {
-      fields = `
-        ${hp ? `<span>🛍 ${hp}</span>` : ''}
-        ${c.bv ? `<span>BV：${c.bv}</span>` : ''}
-        ${c.commDate ? `<span>📅 溝通日期：${c.commDate}</span>` : ''}
-        ${c.commReason ? `<span style="color:#92400E">📌 成交顧慮：${c.commReason}</span>` : ''}
-        ${c.commNextDate ? `<span style="color:#2B6CB0">🗓 下次溝通：${c.commNextDate}</span>` : ''}`;
-    }
-
-    const div = document.createElement('div');
-    div.className = `cust-card comm-${cs}`;
-    const cid = String(c.id);
-    div.innerHTML = `
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-            <strong style="font-size:14px">${hn}</strong>
-            ${badge}
-          </div>
-          <div style="font-size:12px;color:var(--gray-600);display:flex;gap:12px;flex-wrap:wrap;line-height:1.9">
-            ${fields}
-          </div>
-        </div>
-        <div style="display:flex;gap:4px;flex-shrink:0">
-          <button class="btn btn-outline btn-sm btn-icon" onclick="openCustomerModal('${cid}')">✏️</button>
-          <button class="btn btn-danger btn-sm btn-icon" onclick="deleteCustomer('${cid}')">🗑️</button>
-        </div>
-      </div>`;
-    wrap.appendChild(div);
-  });
-}
-
-// ════════════════════════════════
-// PLAN 100
-// ════════════════════════════════
-function openPlan100Modal(id) {
-  state.editingId = id || null;
-  const p = id ? findById(state.plan100, id) : null;
-  document.getElementById('plan100-modal-title').textContent = id ? '編輯長客' : '新增長客';
-  document.getElementById('p100-referrer').value = p?.referrer || '';
-  document.getElementById('p100-name').value = p?.name || '';
-  document.getElementById('p100-no').value = p?.no || '';
-  document.getElementById('p100-content').value = p?.content || '';
-  document.getElementById('p100-bv').value = p?.bv || '';
-  document.getElementById('p100-date').value = p?.date || '';
-  document.getElementById('p100-payment').value = p?.payment || '';
-  openModal('plan100-modal');
-}
-function savePlan100() {
-  const name = document.getElementById('p100-name').value.trim();
-  if (!name) { alert('請輸入姓名'); return; }
-  const data = {
-    referrer: document.getElementById('p100-referrer').value.trim(),
-    name,
-    no: document.getElementById('p100-no').value,
-    content: document.getElementById('p100-content').value,
-    bv: parseFloat(document.getElementById('p100-bv').value)||0,
-    date: document.getElementById('p100-date').value,
-    payment: document.getElementById('p100-payment').value,
-  };
-  if (state.editingId) {
-    const i = findIdxById(state.plan100, state.editingId);
-    state.plan100[i] = { ...state.plan100[i], ...data };
-    fsSet('plan100', state.editingId, state.plan100[i]);
-  } else {
-    const newId = Date.now().toString();
-    state.plan100.push({ id: newId, ...data });
-    fsSet('plan100', newId, { id: newId, ...data });
-  }
-  closeModal('plan100-modal'); renderPlan100(); updateDashboard();
-}
-function deletePlan100(id) {
-  if (!confirm('確定刪除？')) return;
-  state.plan100 = filterById(state.plan100, id);
-  fsDel('plan100', id);
-  renderPlan100(); updateDashboard();
-}
-function clearP100Search() {
-  document.getElementById('p100-search-name').value = '';
-  document.getElementById('p100-search-ref').value = '';
-  document.getElementById('p100-search-content').value = '';
-  renderPlan100();
-}
-function renderPlan100() {
-  const qName    = (document.getElementById('p100-search-name')?.value || '').toLowerCase().trim();
-  const qRef     = (document.getElementById('p100-search-ref')?.value || '').toLowerCase().trim();
-  const qContent = (document.getElementById('p100-search-content')?.value || '').toLowerCase().trim();
-
-  let list = state.plan100;
-  if (qName)    list = list.filter(p => p.name.toLowerCase().includes(qName));
-  if (qRef)     list = list.filter(p => (p.referrer||'').toLowerCase().includes(qRef));
-  if (qContent) list = list.filter(p => (p.content||'').toLowerCase().includes(qContent));
-
-  const tbody = document.getElementById('plan100-tbody');
-  tbody.innerHTML = '';
-  const isEmpty = state.plan100.length === 0;
-  const noResult = !isEmpty && list.length === 0;
-  document.getElementById('plan100-empty').style.display = isEmpty ? 'block' : 'none';
-  document.getElementById('plan100-no-result').style.display = noResult ? 'block' : 'none';
-
-  const countEl = document.getElementById('p100-result-count');
-  if (countEl) {
-    const hasFilter = qName || qRef || qContent;
-    // BV total of filtered results
-    const filteredBV = list.reduce((s,p) => s + p.bv, 0);
-    countEl.textContent = hasFilter
-      ? `找到 ${list.length} 筆 · 篩選 BV：${filteredBV.toLocaleString()}（共 ${state.plan100.length} 筆）`
-      : `共 ${state.plan100.length} 位長客`;
-  }
-
-  // Full total always uses all records
-  const totalBV = state.plan100.reduce((s,p) => s + p.bv, 0);
-  document.getElementById('plan100-total-bv').textContent = totalBV.toLocaleString();
-
-  const hi = (str, q) => q
-    ? str.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),
-        m => `<mark style="background:var(--purple-light);border-radius:3px;padding:0 2px">${m}</mark>`)
-    : str;
-
-  list.forEach((p, i) => {
-    const pid = String(p.id);
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td style="color:var(--purple-mid);font-weight:700">${state.plan100.indexOf(p)+1}</td>
-      <td>${p.referrer ? `<span style="background:var(--purple-pale);color:var(--purple-deep);font-weight:700;padding:2px 8px;border-radius:6px;font-size:12px">${hi(p.referrer,qRef)}</span>` : '<span style="color:var(--gray-400)">—</span>'}</td>
-      <td><strong>${hi(p.name,qName)}</strong></td>
-      <td>${p.no||'—'}</td>
-      <td style="max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hi(p.content||'—',qContent)}</td>
-      <td class="text-purple">${p.bv.toLocaleString()}</td>
-      <td>${p.date||'—'}</td>
-      <td>${p.payment||'—'}</td>
-      <td><div style="display:flex;gap:4px">
-        <button class="btn btn-outline btn-sm btn-icon" onclick="openPlan100Modal('${pid}')">✏️</button>
-        <button class="btn btn-danger btn-sm btn-icon" onclick="deletePlan100('${pid}')">🗑️</button>
-      </div></td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-// ════════════════════════════════
-// USERNAME
-// ════════════════════════════════
-function openUserNameModal() {
-  document.getElementById('username-input').value = state.userName;
-  openModal('username-modal');
-  setTimeout(() => document.getElementById('username-input').select(), 100);
-}
-function saveUserName() {
-  const val = document.getElementById('username-input').value.trim();
-  if (!val) return;
-  state.userName = val;
-  document.getElementById('user-display-name').textContent = val;
-  fsSetProfile({ userName: val });
-  closeModal('username-modal');
-}
-
-// ════════════════════════════════
-// ORG ALBUM
-// ════════════════════════════════
-function addOrgPhotos(input) {
-  const files = Array.from(input.files);
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const newId = (Date.now() + Math.random()).toString().replace('.','');
-      const rec = { id: newId, dataUrl: e.target.result, name: file.name };
-      state.orgAlbum.push(rec);
-      fsSet('orgAlbum', newId, rec);
-      renderOrgAlbum();
-    };
-    reader.readAsDataURL(file);
-  });
-  input.value = '';
-}
-function deleteOrgPhoto(id) {
-  state.orgAlbum = filterById(state.orgAlbum, id);
-  fsDel('orgAlbum', id);
-  renderOrgAlbum();
-}
-function renderOrgAlbum() {
-  const grid  = document.getElementById('org-album-grid');
-  const empty = document.getElementById('org-album-empty');
-  if (!state.orgAlbum.length) {
-    grid.style.display = 'none'; empty.style.display = 'flex'; return;
-  }
-  empty.style.display = 'none'; grid.style.display = 'grid';
-  grid.innerHTML = state.orgAlbum.map(p => `
-    <div style="position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;cursor:pointer;box-shadow:0 2px 8px rgba(107,70,193,.1)" onclick="openLightbox('${p.dataUrl}')">
-      <img src="${p.dataUrl}" style="width:100%;height:100%;object-fit:cover;display:block" alt="${p.name}">
-      <button onclick="event.stopPropagation();deleteOrgPhoto('${String(p.id)}')"
-        style="position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.55);color:white;border:none;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700;padding:0;line-height:1">✕</button>
-    </div>`).join('');
-}
-
-// ════════════════════════════════
-// ORG MEMBERS
-// ════════════════════════════════
-function openAddOrgModal() {
-  document.getElementById('org-add-count').value = 1;
-  document.getElementById('org-add-note').value = '';
-  document.getElementById('org-base-input').value = state.orgBase || '';
-  renderOrgHistory();
-  openModal('add-org-modal');
-}
-function saveOrgBase() {
-  const v = parseInt(document.getElementById('org-base-input').value) || 0;
-  state.orgBase = Math.max(0, v);
-  fsSetProfile({ orgBase: state.orgBase });
-  updateDashboard();
-}
-function confirmAddOrg() {
-  const count = parseInt(document.getElementById('org-add-count').value) || 0;
-  if (count < 1) { alert('請輸入至少 1 人'); return; }
-  const note = document.getElementById('org-add-note').value.trim();
-  const newId = Date.now().toString();
-  const rec = { id: newId, count, note, ym: currentYM, ts: new Date().toLocaleString('zh-TW') };
-  state.orgLog.push(rec);
-  fsSet('orgLog', newId, rec);
-  renderOrgHistory();
-  updateDashboard();
-}
-function deleteOrgLog(id) {
-  state.orgLog = filterById(state.orgLog, id);
-  fsDel('orgLog', id);
-  renderOrgHistory();
-  updateDashboard();
-}
-function renderOrgHistory() {
-  const el = document.getElementById('org-history-list');
-  if (!state.orgLog.length) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div style="font-size:11px;font-weight:800;color:var(--purple-deep);margin-bottom:8px;letter-spacing:.05em">新增記錄</div>` +
-    [...state.orgLog].reverse().map(x => `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--purple-pale);border-radius:8px;margin-bottom:6px">
-        <div>
-          <span style="font-size:15px;font-weight:900;color:var(--purple-deep)">+${x.count}</span>
-          <span style="font-size:12px;color:var(--purple-mid);margin-left:6px">${x.note||x.ym}</span>
-          <div style="font-size:10px;color:var(--gray-400)">${x.ts}</div>
-        </div>
-        <button class="btn btn-danger btn-sm btn-icon" onclick="deleteOrgLog('${String(x.id)}')">🗑️</button>
-      </div>`).join('');
-}
-
-// ════════════════════════════════
-// DASHBOARD
-// ════════════════════════════════
-function updateProgress() {
-  const gPV = parseFloat(document.getElementById('goal-pv').value)||0;
-  const cPV = parseFloat(document.getElementById('current-pv').value)||0;
-  const gBV = parseFloat(document.getElementById('goal-bv').value)||0;
-  const cBV = parseFloat(document.getElementById('current-bv').value)||0;
-  const pvPct = gPV ? Math.min(100, Math.round(cPV/gPV*100)) : 0;
-  const bvPct = gBV ? Math.min(100, Math.round(cBV/gBV*100)) : 0;
-  document.getElementById('pv-bar').style.width = pvPct + '%';
-  document.getElementById('bv-bar').style.width = bvPct + '%';
-  document.getElementById('pv-pct').textContent = pvPct + '%';
-  document.getElementById('bv-pct').textContent = bvPct + '%';
-  document.getElementById('pv-label').textContent = cPV + ' / ' + gPV;
-  document.getElementById('bv-label').textContent = cBV + ' / ' + gBV;
-  // persist goals
-  fsSetProfile({ goalPV: gPV, goalBV: gBV, currentPV: cPV, currentBV: cBV });
-}
-function updateDashboard() {
-  // Org counts — independent from leads/meetings/repurchase/BV
-  const newThisMonth = state.orgLog.filter(x => x.ym === currentYM).reduce((s,x) => s + x.count, 0);
-  const orgTotal = state.orgBase + state.orgLog.reduce((s,x) => s + x.count, 0);
-  document.getElementById('dash-org-total').innerHTML = orgTotal + '<span class="unit">人</span>';
-  document.getElementById('dash-org-new').innerHTML = newThisMonth + '<span class="unit">人</span>';
-  // keep modal base display in sync if open
-  const bd = document.getElementById('org-base-display');
-  if (bd) bd.textContent = state.orgBase;
-
-  document.getElementById('dash-leads-count').innerHTML = state.leads.length + '<span class="unit">人</span>';
-  const meetings = state.leads.filter(l => { if(!l.date) return false; const d = new Date(l.date); return d.getMonth()+1===currentMonth && d.getFullYear()===currentYear; }).length;
-  document.getElementById('dash-meetings-count').innerHTML = meetings + '<span class="unit">場</span>';
-  const repurchase = state.customers.filter(c => parseInt(c.repurchaseMonth)===currentMonth).length;
-  document.getElementById('dash-repurchase-count').innerHTML = repurchase + '<span class="unit">位</span>';
-  const totalBV = state.plan100.reduce((s,p) => s + p.bv, 0);
-  document.getElementById('dash-plan100-bv').innerHTML = totalBV.toLocaleString() + '<span class="unit">BV</span>';
-  const summaryBody = document.getElementById('action-summary-body');
-  summaryBody.innerHTML = `
-    <tr><td>👥 組織總人數</td><td><span class="badge" style="background:var(--purple-deep)">${orgTotal}</span></td><td>所有歷次推薦人數的累積</td></tr>
-    <tr><td>🌟 本月推薦人數</td><td><span class="badge" style="background:var(--purple-mid)">${newThisMonth}</span></td><td>本月新加入組織的夥伴</td></tr>
-    <tr><td>📋 開發名單總數</td><td><span class="badge">${state.leads.length}</span></td><td>持續跟進潛在夥伴</td></tr>
-    <tr><td>🅰️ A 名單人數</td><td><span class="badge" style="background:var(--purple-deep)">${state.leads.filter(l=>l.ab==='A').length}</span></td><td>重點優先跟進</td></tr>
-    <tr><td>🗓️ 本月聚會場次</td><td><span class="badge" style="background:#805AD5">${meetings}</span></td><td>本月已安排聚會</td></tr>
-    <tr><td>🔔 本月需回購顧客</td><td><span class="badge" style="background:#C05621">${repurchase}</span></td><td>需主動聯繫回購</td></tr>
-    <tr><td>🏆 長客累積總 BV</td><td><span class="badge" style="background:#2F855A">${totalBV.toLocaleString()}</span></td><td>長客計畫累積業績</td></tr>`;
-  updateProgress();
-}
-
-// ════════════════════════════════
-// HISTORY PAGE  (live — no snapshot needed)
-// ════════════════════════════════
-function ymToLabel(ym) {
-  const [y, m] = ym.split('-');
-  return `${y} 年 ${parseInt(m)} 月`;
-}
-function changeHistMonth(dir) {
-  const [y, m] = histYM.split('-').map(Number);
-  let nm = m + dir, ny = y;
-  if (nm > 12) { nm = 1; ny++; }
-  if (nm < 1)  { nm = 12; ny--; }
-  histYM = `${ny}-${String(nm).padStart(2,'0')}`;
-  renderHistory();
-}
-
-// Helper: check if a date string falls in a given YYYY-MM
-function dateInYM(dateStr, ym) {
-  if (!dateStr) return false;
-  return dateStr.startsWith(ym);
-}
-
-function renderHistory() {
-  const [hy, hm] = histYM.split('-').map(Number);
-  document.getElementById('hist-month-label').textContent = ymToLabel(histYM);
-  const isCurrent = histYM === currentYM;
-  document.getElementById('hist-is-current').style.display = isCurrent ? 'inline-flex' : 'none';
-
-  // ── Compute live stats for selected month ──
-  // Leads: whose date is in this YM
-  const leadsThisMonth = state.leads.filter(l => dateInYM(l.date, histYM));
-
-  // Meetings: same as leads with a date this month
-  const meetings = leadsThisMonth.length;
-
-  // Repurchase: customers whose repurchaseMonth == hm
-  const repurchase = state.customers.filter(c => parseInt(c.repurchaseMonth) === hm).length;
-
-  // Customers success/follow this month (by commDate or buydate)
-  const custSuccess = state.customers.filter(c =>
-    c.commStatus === 'success' && (dateInYM(c.buydate, histYM) || dateInYM(c.commDate, histYM))
-  ).length;
-  const custFollow = state.customers.filter(c =>
-    c.commStatus === 'follow' && dateInYM(c.commDate, histYM)
-  ).length;
-
-  // Org new: log entries for this YM
-  const orgNew = state.orgLog.filter(x => x.ym === histYM).reduce((s,x) => s + x.count, 0);
-
-  // BV: plan100 entries with date in this YM (cumulative up to this month)
-  const bvTotal = state.plan100
-    .filter(p => !p.date || p.date.slice(0,7) <= histYM)
-    .reduce((s,p) => s + p.bv, 0);
-
-  // PV from stored goals (read from inputs only if current month)
-  const pvGoal = isCurrent ? (parseFloat(document.getElementById('goal-pv')?.value)||0) : 0;
-  const pvCur  = isCurrent ? (parseFloat(document.getElementById('current-pv')?.value)||0) : 0;
-  const pvPct  = pvGoal ? Math.round(pvCur / pvGoal * 100) : 0;
-
-  const u = (n, unit) => `${n}<span class="hc-u" style="font-size:12px;margin-left:3px;color:var(--purple-mid)">${unit}</span>`;
-  document.getElementById('hc-leads').innerHTML         = u(leadsThisMonth.length, '人');
-  document.getElementById('hc-meetings').innerHTML      = u(meetings, '場');
-  document.getElementById('hc-repurchase').innerHTML    = u(repurchase, '位');
-  document.getElementById('hc-bv').innerHTML            = u(bvTotal.toLocaleString(), 'BV');
-  document.getElementById('hc-cust-success').innerHTML  = u(custSuccess, '人');
-  document.getElementById('hc-cust-follow').innerHTML   = u(custFollow, '人');
-  document.getElementById('hc-org-new').innerHTML       = u(orgNew, '人');
-  document.getElementById('hc-pv-pct').innerHTML        = isCurrent
-    ? u(pvPct, '%')
-    : '<span style="font-size:11px;color:var(--gray-400)">當月填入</span>';
-
-  // ── Note ──
-  const snap = state.monthlySnapshots.find(s => s.ym === histYM);
-  document.getElementById('hist-note-input').value = snap?.note || '';
-  const noteDisplay = document.getElementById('hist-note-display');
-  noteDisplay.innerHTML = snap?.note
-    ? `<div style="background:var(--purple-pale);border-radius:10px;padding:11px 14px;font-size:13px;color:var(--gray-600);line-height:1.7;border-left:3px solid var(--purple-mid)">
-        <div style="font-size:10px;font-weight:700;color:var(--purple-mid);margin-bottom:5px">📝 儲存於 ${snap.ts}</div>
-        ${snap.note.replace(/\n/g,'<br>')}
-       </div>` : '';
-
-  // ── Detail breakdown ──
-  const detail = document.getElementById('hist-detail');
-  const rows = [
-    { icon:'📋', label:'本月新增名單', items: leadsThisMonth, render: l => `${l.name}（${l.ab}）${l.job?'　'+l.job:''}` },
-    { icon:'✅', label:'本月成交顧客',
-      items: state.customers.filter(c => c.commStatus==='success' && (dateInYM(c.buydate, histYM)||dateInYM(c.commDate, histYM))),
-      render: c => `${c.name}　${c.product||'—'}　BV ${c.bv||0}` },
-    { icon:'△', label:'本月還需跟進',
-      items: state.customers.filter(c => c.commStatus==='follow' && dateInYM(c.commDate, histYM)),
-      render: c => `${c.name}${c.commNextDate?' · 下次：'+c.commNextDate:''}` },
-    { icon:'🌟', label:'本月推薦新增',
-      items: state.orgLog.filter(x => x.ym === histYM),
-      render: x => `+${x.count} 人${x.note?' （'+x.note+'）':''}` },
-  ];
-
-  if (rows.every(r => r.items.length === 0)) {
-    detail.innerHTML = '<div class="empty-state" style="padding:20px"><div class="icon">📂</div>這個月尚無資料</div>';
-    return;
-  }
-
-  detail.innerHTML = rows.map(r => {
-    if (!r.items.length) return '';
-    return `<div style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:800;color:var(--purple-deep);letter-spacing:.06em;margin-bottom:7px">${r.icon} ${r.label}　<span style="font-weight:400;color:var(--gray-400)">${r.items.length} 筆</span></div>
-      ${r.items.map(item => `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--purple-pale);border-radius:8px;font-size:12px;color:var(--gray-800);margin-bottom:4px">
-        <span style="color:var(--purple-mid)">·</span>${r.render(item)}
-      </div>`).join('')}
-    </div>`;
-  }).join('');
-}
-
-function saveHistNote() {
-  const note = document.getElementById('hist-note-input').value;
-  let snap = state.monthlySnapshots.find(s => s.ym === histYM);
-  if (!snap) {
-    snap = { ym: histYM, note: '', ts: '' };
-    state.monthlySnapshots.push(snap);
-    state.monthlySnapshots.sort((a,b) => b.ym.localeCompare(a.ym));
-  }
-  snap.note = note;
-  snap.ts = new Date().toLocaleString('zh-TW');
-  fsSet('monthlySnapshots', histYM, snap);
-  renderHistory();
-}
-
-// ════════════════════════════════
-// PLAN 60
-// ════════════════════════════════
-// p60Images: temp store during modal editing { dataUrl, name }
-let p60TempImages = [];
-
-function openPlan60Modal(id) {
-  state.editingId = id || null;
-  const d = id ? findById(state.plan60, id) : null;
-  document.getElementById('plan60-modal-title').textContent = id ? '編輯 60 天計畫成員' : '新增 60 天計畫成員';
-  document.getElementById('p60-name').value = d?.name || '';
-  document.getElementById('p60-no').value = d?.no || '';
-  document.getElementById('p60-start').value = d?.start || '';
-  document.getElementById('p60-note').value = d?.note || '';
-  p60TempImages = d ? [...(d.images || [])] : [];
-  renderP60Preview();
-  openModal('plan60-modal');
-}
-
-function handleP60Images(input) {
-  const files = Array.from(input.files);
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      p60TempImages.push({ dataUrl: e.target.result, name: file.name });
-      renderP60Preview();
-    };
-    reader.readAsDataURL(file);
-  });
-  input.value = '';
-}
-
-function renderP60Preview() {
-  const wrap = document.getElementById('p60-img-preview');
-  wrap.innerHTML = p60TempImages.map((img, i) => `
-    <div style="position:relative;display:inline-block">
-      <img src="${img.dataUrl}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:2px solid var(--purple-light);cursor:pointer" onclick="openLightbox('${img.dataUrl}')">
-      <button onclick="removeP60TempImg(${i})" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#C53030;color:white;border:none;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700;padding:0">✕</button>
-    </div>`).join('');
-}
-
-function removeP60TempImg(i) {
-  p60TempImages.splice(i, 1);
-  renderP60Preview();
-}
-
-function savePlan60() {
-  const name = document.getElementById('p60-name').value.trim();
-  if (!name) { alert('請輸入姓名'); return; }
-  const data = {
-    name,
-    no: document.getElementById('p60-no').value,
-    start: document.getElementById('p60-start').value,
-    note: document.getElementById('p60-note').value,
-    images: [...p60TempImages],
-  };
-  if (state.editingId) {
-    const i = findIdxById(state.plan60, state.editingId);
-    state.plan60[i] = { ...state.plan60[i], ...data };
-    fsSet('plan60', state.editingId, state.plan60[i]);
-  } else {
-    const newId = Date.now().toString();
-    state.plan60.push({ id: newId, ...data });
-    fsSet('plan60', newId, { id: newId, ...data });
-  }
-  closeModal('plan60-modal');
-  renderPlan60();
-}
-
-function deletePlan60(id) {
-  if (!confirm('確定刪除此成員？')) return;
-  state.plan60 = filterById(state.plan60, id);
-  fsDel('plan60', id);
-  renderPlan60();
-}
-
-function calcDaysIn(startStr) {
-  if (!startStr) return null;
-  const diff = Math.floor((Date.now() - new Date(startStr)) / 86400000) + 1;
-  return Math.max(1, Math.min(diff, 60));
-}
-
-function renderPlan60() {
-  const grid = document.getElementById('plan60-grid');
-  document.getElementById('plan60-empty').style.display = state.plan60.length ? 'none' : 'block';
-  grid.style.display = state.plan60.length ? 'grid' : 'none';
-  grid.innerHTML = state.plan60.map(p => {
-    const pid = String(p.id);
-    const days = calcDaysIn(p.start);
-    const pct = days ? Math.round(days / 60 * 100) : 0;
-    const isDone = days >= 60;
-    const imgs = (p.images || []).map(img =>
-      `<img class="p60-img-thumb" src="${img.dataUrl}" onclick="openLightbox('${img.dataUrl}')" title="${img.name}">`
-    ).join('');
-    return `
-    <div class="p60-card">
-      <div class="p60-card-head">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between">
-          <div>
-            <div class="p60-card-name">👤 ${p.name}</div>
-            <div class="p60-card-meta">${p.no ? '編號：' + p.no : '未填編號'} &nbsp;·&nbsp; 開始：${p.start || '未填'}</div>
-          </div>
-          <div style="display:flex;gap:4px;flex-shrink:0">
-            <button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:white;border:none;padding:5px 9px" onclick="openPlan60Modal('${pid}')">✏️</button>
-            <button class="btn btn-sm" style="background:rgba(255,100,100,.25);color:white;border:none;padding:5px 9px" onclick="deletePlan60('${pid}')">🗑️</button>
-          </div>
-        </div>
-        ${days ? `<div class="p60-day-badge">${isDone ? '🎉 已完成 60 天！' : `第 ${days} 天 / 60 天`}</div>` : ''}
-      </div>
-      <div class="p60-body">
-        ${days ? `
-        <div style="margin-bottom:12px">
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gray-600);margin-bottom:5px"><span>計畫進度</span><span>${pct}%</span></div>
-          <div style="height:8px;background:var(--purple-light);border-radius:99px;overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${isDone?'linear-gradient(90deg,#38A169,#68D391)':'linear-gradient(90deg,var(--purple-deep),var(--purple-mid))'};border-radius:99px;transition:.5s"></div>
-          </div>
-        </div>` : ''}
-        ${imgs ? `<div class="p60-imgs">${imgs}</div>` : '<div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">尚未上傳照片</div>'}
-        ${p.note ? `<div class="p60-note">📝 ${p.note}</div>` : ''}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function openLightbox(src) {
-  document.getElementById('lightbox-img').src = src;
-  document.getElementById('lightbox').classList.add('on');
-}
-
-// ════════════════════════════════
-// LEAD PROFILE (小檔案)
-// ════════════════════════════════
 function openLeadProfile(id) {
   state.editingId = id;
   const l = findById(state.leads, id);
@@ -2166,119 +1104,582 @@ function saveLeadProfile() {
   if (!l) return;
   l.profile = { extra: document.getElementById('lp-extra').value };
   fsSet('leads', state.editingId, l);
-  closeModal('lead-profile-modal');
+  closeModal('lead-profile-modal'); renderLeads();
+}
+function clearLeadSearch() {
+  ['lead-search-name','lead-search-referrer','lead-search-ab','lead-search-month'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
   renderLeads();
+}
+function quickLeadFilter(type) {
+  clearLeadSearch();
+  if (type==='A') document.getElementById('lead-search-ab').value='A';
+  if (type==='B') document.getElementById('lead-search-ab').value='B';
+  if (type==='thismonth') document.getElementById('lead-search-month').value=String(currentMonth);
+  renderLeads();
+}
+function clearCLeads() {
+  const cLeads = state.leads.filter(l => l.ab==='C' && leadIsThisMonth(l));
+  if (!cLeads.length) { alert('本月沒有 C 名單可清除'); return; }
+  if (!confirm(`確定清除本月 ${cLeads.length} 筆 C 名單？`)) return;
+  cLeads.forEach(l => fsDel('leads', l.id));
+  state.leads = state.leads.filter(l => !(l.ab==='C' && leadIsThisMonth(l)));
+  renderLeads(); updateDashboard();
+}
+function renderLeads() {
+  const qName     = (document.getElementById('lead-search-name')?.value||'').toLowerCase().trim();
+  const qReferrer = (document.getElementById('lead-search-referrer')?.value||'').toLowerCase().trim();
+  const qAB       = document.getElementById('lead-search-ab')?.value||'';
+  const qMonth    = document.getElementById('lead-search-month')?.value||'';
+  let list = state.leads;
+  if (qName)     list = list.filter(l => l.name.toLowerCase().includes(qName));
+  if (qReferrer) list = list.filter(l => (l.referrer||'').toLowerCase().includes(qReferrer));
+  if (qAB)       list = list.filter(l => l.ab===qAB);
+  if (qMonth)    list = list.filter(l => { if(!l.date) return false; const d=new Date(l.date); return String(d.getMonth()+1)===qMonth; });
+  const tbody = document.getElementById('leads-tbody');
+  tbody.innerHTML = '';
+  const isEmpty  = state.leads.length===0;
+  const noResult = !isEmpty && list.length===0;
+  document.getElementById('leads-empty').style.display    = isEmpty   ? 'block':'none';
+  document.getElementById('leads-no-result').style.display = noResult ? 'block':'none';
+  const countEl = document.getElementById('lead-result-count');
+  if (countEl) {
+    const hasFilter = qName||qReferrer||qAB||qMonth;
+    const cCount = state.leads.filter(l => l.ab==='C' && leadIsThisMonth(l)).length;
+    countEl.innerHTML = (hasFilter ? `找到 ${list.length} 筆（共 ${state.leads.length} 人）`:`共 ${state.leads.length} 人`)+(cCount?`　<span style="color:#92400E;font-weight:700">⚠ 本月C名單 ${cCount} 筆可清除</span>`:'');
+  }
+  const tagClass = { A:'tag-a', B:'tag-b', C:'tag-c' };
+  list.forEach(l => {
+    const lid = sid(l.id);
+    const hn = qName ? l.name.replace(new RegExp(qName,'gi'),m=>`<mark style="background:var(--purple-light);border-radius:3px;padding:0 2px">${m}</mark>`) : l.name;
+    const hr = qReferrer&&l.referrer ? l.referrer.replace(new RegExp(qReferrer,'gi'),m=>`<mark style="background:var(--purple-light);border-radius:3px;padding:0 2px">${m}</mark>`) : (l.referrer||'—');
+    const isC = l.ab==='C';
+    const tr = document.createElement('tr');
+    if (isC) tr.style.opacity='0.72';
+    tr.innerHTML = `<td style="color:var(--purple-mid);font-size:12px">${hr}</td><td><strong>${hn}</strong></td><td>${l.gender||'—'}</td><td>${l.job||'—'}</td><td><button class="btn btn-outline btn-sm btn-icon" onclick="openLeadProfile('${lid}')" title="查看備註" style="font-size:14px">📝</button>${l.profile?.extra?'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--purple-mid);margin-left:4px;vertical-align:middle"></span>':''}</td><td>${l.meeting||'—'}</td><td>${l.date||'—'}</td><td><span class="tag ${tagClass[l.ab]||'tag-b'}">${l.ab}</span></td><td style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${l.nextstep||'—'}</td><td><div style="display:flex;gap:4px"><button class="btn btn-outline btn-sm btn-icon" onclick="openLeadModal('${lid}')">✏️</button><button class="btn btn-danger btn-sm btn-icon" onclick="deleteLead('${lid}')">🗑️</button></div></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ════════════════════════════════
+// PIPELINE
+// ════════════════════════════════
+let nbEditingId = null, nbTempFollowups = [];
+function openPipeModal(id) {
+  state.editingId = id || null;
+  const p = id ? findById(state.pipeline, id) : null;
+  document.getElementById('pipe-modal-title').textContent = id ? '編輯A名單成員' : '新增 A 名單成員';
+  document.getElementById('pipe-name').value = p?.name||'';
+  document.getElementById('pipe-age').value  = p?.age||'';
+  document.getElementById('pipe-job').value  = p?.job||'';
+  openModal('pipe-modal');
+}
+function savePipe() {
+  const name = document.getElementById('pipe-name').value.trim();
+  if (!name) { alert('請輸入姓名'); return; }
+  const data = { name, age: document.getElementById('pipe-age').value, job: document.getElementById('pipe-job').value };
+  if (state.editingId) {
+    const i = findIdxById(state.pipeline, state.editingId);
+    state.pipeline[i] = { ...state.pipeline[i], ...data };
+    fsSet('pipeline', state.editingId, state.pipeline[i]);
+  } else {
+    const newId = Date.now().toString();
+    const rec = { id:newId, icebreak:false, d336:'', dcomp:'', dprod:'', planLearn:'', planProd:'', planGoal:'', notebook:'', followups:[], ...data };
+    state.pipeline.push(rec); fsSet('pipeline', newId, rec);
+  }
+  closeModal('pipe-modal'); renderPipeline();
+}
+function deletePipe(id) {
+  if (!confirm('確定刪除？')) return;
+  state.pipeline = filterById(state.pipeline, id);
+  fsDel('pipeline', id); renderPipeline();
+}
+function togglePipe(id) {
+  const p = findById(state.pipeline, id);
+  if (p) { p.icebreak = !p.icebreak; fsSet('pipeline', id, p); updateSummaryBar(); }
+}
+function toggleExpand(id) {
+  const card = document.getElementById('pcard-' + id);
+  if (card) card.classList.toggle('expanded');
+}
+function setPipeDate(id, field, val) {
+  const p = findById(state.pipeline, id);
+  if (!p) return;
+  p[field] = val; fsSet('pipeline', id, p);
+  const card = document.getElementById('pcard-' + id);
+  if (card) card.classList.toggle('glow', !!(p.planLearn && p.planProd && p.planGoal));
+}
+function openNotebook(id) {
+  nbEditingId = id;
+  const p = findById(state.pipeline, id);
+  document.getElementById('nb-person-name').textContent = p?.name||'';
+  document.getElementById('nb-dream').value = p?.notebook||'';
+  nbTempFollowups = [...(p?.followups||[])];
+  renderFollowupList();
+  document.getElementById('nb-fu-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('nb-fu-text').value = '';
+  openModal('notebook-modal');
+}
+function addFollowup() {
+  const date = document.getElementById('nb-fu-date').value;
+  const text = document.getElementById('nb-fu-text').value.trim();
+  if (!text) { document.getElementById('nb-fu-text').focus(); return; }
+  nbTempFollowups.push({ id: Date.now(), date, text });
+  document.getElementById('nb-fu-text').value = '';
+  renderFollowupList();
+}
+function removeFollowup(id) { nbTempFollowups = nbTempFollowups.filter(x => x.id !== id); renderFollowupList(); }
+function renderFollowupList() {
+  const el = document.getElementById('nb-followup-list');
+  if (!nbTempFollowups.length) { el.innerHTML='<div style="font-size:12px;color:var(--gray-400);margin-bottom:8px">尚未新增跟進記錄</div>'; return; }
+  el.innerHTML = [...nbTempFollowups].reverse().map(f=>`<div class="followup-item"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div><div class="followup-date">${f.date||'—'}</div><div class="followup-text">${f.text}</div></div><button onclick="removeFollowup(${f.id})" style="background:none;border:none;color:var(--gray-400);cursor:pointer;font-size:14px;padding:0 0 0 8px">✕</button></div></div>`).join('');
+}
+function saveNotebook() {
+  const p = findById(state.pipeline, nbEditingId);
+  if (!p) return;
+  p.notebook = document.getElementById('nb-dream').value;
+  p.followups = [...nbTempFollowups];
+  fsSet('pipeline', nbEditingId, p);
+  closeModal('notebook-modal'); renderPipeline();
+}
+function renderPipeline() {
+  const list = document.getElementById('pipeline-list');
+  const empty = document.getElementById('pipeline-empty');
+  if (!state.pipeline.length) { list.style.display='none'; empty.style.display='block'; return; }
+  list.style.display='flex'; empty.style.display='none';
+  list.innerHTML = state.pipeline.map(p => {
+    const pid = sid(p.id);
+    const allPlans = p.planLearn && p.planProd && p.planGoal;
+    const hasNotes = p.notebook || (p.followups && p.followups.length);
+    const mkDate = (field, label) => `<div class="date-node"><div class="date-node-lbl">${label}</div><input type="date" class="date-input-mini${p[field]?' filled':''}" value="${p[field]||''}" onchange="setPipeDate('${pid}','${field}',this.value);this.classList.toggle('filled',!!this.value)"></div>`;
+    return `<div class="pipe-card${allPlans?' glow':''}" id="pcard-${pid}"><div class="pipe-head" onclick="toggleExpand('${pid}')"><div><div class="pipe-name">${p.name}${hasNotes?'<span style="font-size:12px;opacity:.7;margin-left:6px">📝</span>':''}</div><div class="pipe-meta">${p.age?p.age+'歲　':''}${p.job||'未填職業'}</div></div><div style="display:flex;align-items:center;gap:8px"><label class="toggle-wrap" onclick="event.stopPropagation()"><input type="checkbox" ${p.icebreak?'checked':''} onchange="togglePipe('${pid}')"><span class="tog-track"></span><span class="tog-label" style="color:${p.icebreak?'#D6BCFA':'rgba(255,255,255,.5)'}">${p.icebreak?'O':'X'}</span></label><span style="font-size:11px;opacity:.6">▾ 展開</span></div></div><div class="pipe-body"><div style="font-size:10px;font-weight:800;color:var(--purple-mid);letter-spacing:.07em;margin-bottom:8px">📅 事業進度節點</div><div class="nodes-grid" style="margin-bottom:12px">${mkDate('d336','336 制度說明')}${mkDate('dcomp','公司介紹')}${mkDate('dprod','產品示範')}</div><div class="section-divider"></div><div style="font-size:10px;font-weight:800;color:var(--purple-mid);letter-spacing:.07em;margin-bottom:8px;margin-top:10px">🚀 三個計畫啟動日期${allPlans?' <span style=\\"color:#68D391\\">✓ 全部完成</span>':''}</div><div class="plans-grid" style="margin-bottom:14px">${mkDate('planLearn','學習計畫')}${mkDate('planProd','產品計畫')}${mkDate('planGoal','目標計畫')}</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline btn-sm" onclick="openNotebook('${pid}')">💜 心靈筆記本${hasNotes?' ●':''}</button><button class="btn btn-outline btn-sm" onclick="openPipeModal('${pid}')">✏️ 編輯</button><button class="btn btn-danger btn-sm" onclick="deletePipe('${pid}')">🗑️ 刪除</button></div>${p.followups?.length?`<div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--purple-light)"><div style="font-size:10px;font-weight:800;color:var(--purple-mid);margin-bottom:7px;letter-spacing:.05em">最近跟進</div>${[...p.followups].slice(-2).reverse().map(f=>`<div class="followup-item"><div class="followup-date">${f.date||'—'}</div><div class="followup-text">${f.text}</div></div>`).join('')}</div>`:''}</div></div>`;
+  }).join('');
+}
+function updateSummaryBar() { updateDashboard(); }
+
+// ════════════════════════════════
+// CUSTOMERS
+// ════════════════════════════════
+function updateCommOptStyle() {
+  const val = document.querySelector('input[name="cust-comm"]:checked')?.value || 'none';
+  ['none','success','follow'].forEach(v => {
+    const el = document.getElementById('comm-opt-' + v);
+    if (!el) return;
+    el.style.border = v===val ? '2px solid var(--purple-deep)' : '2px solid var(--gray-200)';
+    el.style.background = v===val ? 'var(--purple-pale)' : 'var(--white)';
+  });
+  const fd = id => { const e=document.getElementById(id); if(e) e.style.display='block'; };
+  const hd = id => { const e=document.getElementById(id); if(e) e.style.display='none'; };
+  if (val==='none')    { fd('field-commdate'); hd('field-buydate'); hd('field-repurchase'); hd('field-reason'); hd('field-nextdate'); }
+  if (val==='success') { hd('field-commdate'); fd('field-buydate'); fd('field-repurchase'); hd('field-reason'); hd('field-nextdate'); }
+  if (val==='follow')  { fd('field-commdate'); hd('field-buydate'); hd('field-repurchase'); fd('field-reason'); fd('field-nextdate'); }
+}
+function openCustomerModal(id) {
+  state.editingId = id || null;
+  const c = id ? findById(state.customers, id) : null;
+  document.getElementById('customer-modal-title').textContent = id ? '編輯顧客' : '新增顧客';
+  document.getElementById('cust-name').value = c?.name||'';
+  document.getElementById('cust-product').value = c?.product||'';
+  document.getElementById('cust-bv').value = c?.bv||'';
+  document.getElementById('cust-comm-date').value = c?.commDate||'';
+  document.getElementById('cust-buydate').value = c?.buydate||'';
+  document.getElementById('cust-repurchase-month').value = c?.repurchaseMonth||'';
+  document.getElementById('cust-comm-reason').value = c?.commReason||'';
+  document.getElementById('cust-comm-nextdate').value = c?.commNextDate||'';
+  const commVal = c?.commStatus||'none';
+  document.querySelectorAll('input[name="cust-comm"]').forEach(r => { r.checked = r.value===commVal; });
+  updateCommOptStyle(); openModal('customer-modal');
+}
+function saveCustomer() {
+  const name = document.getElementById('cust-name').value.trim();
+  if (!name) { alert('請輸入姓名'); return; }
+  const commStatus = document.querySelector('input[name="cust-comm"]:checked')?.value||'none';
+  const data = { name, product: document.getElementById('cust-product').value, bv: parseFloat(document.getElementById('cust-bv').value)||0, commStatus, commDate: commStatus!=='success'?document.getElementById('cust-comm-date').value:'', buydate: commStatus==='success'?document.getElementById('cust-buydate').value:'', repurchaseMonth: commStatus==='success'?document.getElementById('cust-repurchase-month').value:'', commReason: commStatus==='follow'?document.getElementById('cust-comm-reason').value:'', commNextDate: commStatus==='follow'?document.getElementById('cust-comm-nextdate').value:'' };
+  if (state.editingId) {
+    const i = findIdxById(state.customers, state.editingId);
+    state.customers[i] = { ...state.customers[i], ...data };
+    fsSet('customers', state.editingId, state.customers[i]);
+  } else {
+    const newId = Date.now().toString();
+    state.customers.push({ id:newId, ...data });
+    fsSet('customers', newId, { id:newId, ...data });
+  }
+  closeModal('customer-modal'); renderCustomers(); updateDashboard();
+}
+function deleteCustomer(id) {
+  if (!confirm('確定刪除？')) return;
+  state.customers = filterById(state.customers, id);
+  fsDel('customers', id); renderCustomers(); updateDashboard();
+}
+function clearCustSearch() {
+  ['cust-search-name','cust-search-product','cust-search-month','cust-search-status'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  renderCustomers();
+}
+function quickFilter(type) {
+  clearCustSearch();
+  if (type==='month')  document.getElementById('cust-search-month').value  = String(currentMonth);
+  if (type==='follow') document.getElementById('cust-search-status').value = 'follow';
+  renderCustomers();
+}
+function renderCustomers() {
+  const qName    = (document.getElementById('cust-search-name')?.value||'').toLowerCase().trim();
+  const qProduct = (document.getElementById('cust-search-product')?.value||'').toLowerCase().trim();
+  const qMonth   = document.getElementById('cust-search-month')?.value||'';
+  const qStatus  = document.getElementById('cust-search-status')?.value||'';
+  let list = state.customers;
+  if (qName)    list = list.filter(c => c.name.toLowerCase().includes(qName));
+  if (qProduct) list = list.filter(c => (c.product||'').toLowerCase().includes(qProduct));
+  if (qMonth)   list = list.filter(c => String(c.repurchaseMonth)===qMonth);
+  if (qStatus)  list = list.filter(c => (c.commStatus||'none')===qStatus);
+  const wrap = document.getElementById('customers-cards');
+  wrap.innerHTML = '';
+  const isEmpty  = state.customers.length===0;
+  const noResult = !isEmpty && list.length===0;
+  document.getElementById('customers-empty').style.display     = isEmpty   ?'block':'none';
+  document.getElementById('customers-no-result').style.display = noResult  ?'block':'none';
+  const countEl = document.getElementById('cust-result-count');
+  if (countEl) {
+    const hasFilter = qName||qProduct||qMonth||qStatus;
+    const followCount = state.customers.filter(c => c.commStatus==='follow').length;
+    countEl.innerHTML = (hasFilter?`找到 ${list.length} 筆（共 ${state.customers.length} 位）`:`共 ${state.customers.length} 位顧客`)+(followCount?`　<span style="color:#92400E;font-weight:700">△ 還需跟進 ${followCount} 位</span>`:'');
+  }
+  const order = { follow:0, none:1, success:2 };
+  list = [...list].sort((a,b) => (order[a.commStatus||'none']||1)-(order[b.commStatus||'none']||1));
+  list.forEach(c => {
+    const cs = c.commStatus||'none';
+    const cid = sid(c.id);
+    const hn = qName ? c.name.replace(new RegExp(qName,'gi'),m=>`<mark style="background:var(--purple-light);border-radius:3px;padding:0 2px">${m}</mark>`) : c.name;
+    const hp = qProduct ? (c.product||'').replace(new RegExp(qProduct,'gi'),m=>`<mark style="background:var(--purple-light);border-radius:3px;padding:0 2px">${m}</mark>`) : (c.product||'');
+    const isRepurchaseMonth = parseInt(c.repurchaseMonth)===currentMonth;
+    const badge = cs==='success' ? '<span class="comm-badge success">✅ 已成交</span>' : cs==='follow' ? '<span class="comm-badge follow">△ 還需跟進</span>' : '<span class="comm-badge none">— 未溝通</span>';
+    let fields = '';
+    if (cs==='none')    fields = `${hp?`<span>🛍 ${hp}</span>`:''} ${c.bv?`<span>BV：${c.bv}</span>`:''} ${c.commDate?`<span>📅 溝通日期：${c.commDate}</span>`:''}`;
+    else if (cs==='success') fields = `${hp?`<span>🛍 ${hp}</span>`:''} ${c.bv?`<span>BV：${c.bv}</span>`:''} ${c.buydate?`<span>📅 購買日：${c.buydate}</span>`:''} ${c.repurchaseMonth?`<span>🔄 回購月：${c.repurchaseMonth}月${isRepurchaseMonth?' 🔔':''}</span>`:''}`;
+    else fields = `${hp?`<span>🛍 ${hp}</span>`:''} ${c.bv?`<span>BV：${c.bv}</span>`:''} ${c.commDate?`<span>📅 溝通日期：${c.commDate}</span>`:''} ${c.commReason?`<span style="color:#92400E">📌 成交顧慮：${c.commReason}</span>`:''} ${c.commNextDate?`<span style="color:#2B6CB0">🗓 下次溝通：${c.commNextDate}</span>`:''}`;
+    const div = document.createElement('div');
+    div.className = `cust-card comm-${cs}`;
+    div.innerHTML = `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px"><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px"><strong style="font-size:14px">${hn}</strong>${badge}</div><div style="font-size:12px;color:var(--gray-600);display:flex;gap:12px;flex-wrap:wrap;line-height:1.9">${fields}</div></div><div style="display:flex;gap:4px;flex-shrink:0"><button class="btn btn-outline btn-sm btn-icon" onclick="openCustomerModal('${cid}')">✏️</button><button class="btn btn-danger btn-sm btn-icon" onclick="deleteCustomer('${cid}')">🗑️</button></div></div>`;
+    wrap.appendChild(div);
+  });
+}
+
+// ════════════════════════════════
+// PLAN 100
+// ════════════════════════════════
+function openPlan100Modal(id) {
+  state.editingId = id||null;
+  const p = id ? findById(state.plan100, id) : null;
+  document.getElementById('plan100-modal-title').textContent = id ? '編輯長客' : '新增長客';
+  document.getElementById('p100-referrer').value = p?.referrer||'';
+  document.getElementById('p100-name').value     = p?.name||'';
+  document.getElementById('p100-no').value       = p?.no||'';
+  document.getElementById('p100-content').value  = p?.content||'';
+  document.getElementById('p100-bv').value       = p?.bv||'';
+  document.getElementById('p100-date').value     = p?.date||'';
+  document.getElementById('p100-payment').value  = p?.payment||'';
+  openModal('plan100-modal');
+}
+function savePlan100() {
+  const name = document.getElementById('p100-name').value.trim();
+  if (!name) { alert('請輸入姓名'); return; }
+  const data = { referrer: document.getElementById('p100-referrer').value.trim(), name, no: document.getElementById('p100-no').value, content: document.getElementById('p100-content').value, bv: parseFloat(document.getElementById('p100-bv').value)||0, date: document.getElementById('p100-date').value, payment: document.getElementById('p100-payment').value };
+  if (state.editingId) {
+    const i = findIdxById(state.plan100, state.editingId);
+    state.plan100[i] = { ...state.plan100[i], ...data };
+    fsSet('plan100', state.editingId, state.plan100[i]);
+  } else {
+    const newId = Date.now().toString();
+    state.plan100.push({ id:newId, ...data });
+    fsSet('plan100', newId, { id:newId, ...data });
+  }
+  closeModal('plan100-modal'); renderPlan100(); updateDashboard();
+}
+function deletePlan100(id) {
+  if (!confirm('確定刪除？')) return;
+  state.plan100 = filterById(state.plan100, id);
+  fsDel('plan100', id); renderPlan100(); updateDashboard();
+}
+function clearP100Search() {
+  ['p100-search-name','p100-search-ref','p100-search-content'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  renderPlan100();
+}
+function renderPlan100() {
+  const qName    = (document.getElementById('p100-search-name')?.value||'').toLowerCase().trim();
+  const qRef     = (document.getElementById('p100-search-ref')?.value||'').toLowerCase().trim();
+  const qContent = (document.getElementById('p100-search-content')?.value||'').toLowerCase().trim();
+  let list = state.plan100;
+  if (qName)    list = list.filter(p => p.name.toLowerCase().includes(qName));
+  if (qRef)     list = list.filter(p => (p.referrer||'').toLowerCase().includes(qRef));
+  if (qContent) list = list.filter(p => (p.content||'').toLowerCase().includes(qContent));
+  const tbody = document.getElementById('plan100-tbody');
+  tbody.innerHTML = '';
+  document.getElementById('plan100-empty').style.display    = state.plan100.length===0 ? 'block':'none';
+  document.getElementById('plan100-no-result').style.display = (!state.plan100.length&&list.length===0)||(!state.plan100.length)?'none':(list.length===0?'block':'none');
+  const totalBV = state.plan100.reduce((s,p) => s+p.bv, 0);
+  document.getElementById('plan100-total-bv').textContent = totalBV.toLocaleString();
+  const countEl = document.getElementById('p100-result-count');
+  if (countEl) { const hasFilter=qName||qRef||qContent; countEl.textContent = hasFilter?`找到 ${list.length} 筆（共 ${state.plan100.length} 筆）`:`共 ${state.plan100.length} 位長客`; }
+  const hi = (str,q) => q ? str.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),m=>`<mark style="background:var(--purple-light);border-radius:3px;padding:0 2px">${m}</mark>`) : str;
+  list.forEach((p,i) => {
+    const pid = sid(p.id);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="color:var(--purple-mid);font-weight:700">${state.plan100.indexOf(p)+1}</td><td>${p.referrer?`<span style="background:var(--purple-pale);color:var(--purple-deep);font-weight:700;padding:2px 8px;border-radius:6px;font-size:12px">${hi(p.referrer,qRef)}</span>`:'<span style="color:var(--gray-400)">—</span>'}</td><td><strong>${hi(p.name,qName)}</strong></td><td>${p.no||'—'}</td><td style="max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hi(p.content||'—',qContent)}</td><td class="text-purple">${p.bv.toLocaleString()}</td><td>${p.date||'—'}</td><td>${p.payment||'—'}</td><td><div style="display:flex;gap:4px"><button class="btn btn-outline btn-sm btn-icon" onclick="openPlan100Modal('${pid}')">✏️</button><button class="btn btn-danger btn-sm btn-icon" onclick="deletePlan100('${pid}')">🗑️</button></div></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ════════════════════════════════
+// ORG ALBUM
+// ════════════════════════════════
+function addOrgPhotos(input) {
+  const files = Array.from(input.files);
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const newId = (Date.now()+Math.random()).toString().replace('.','');
+      const rec = { id:newId, dataUrl:e.target.result, name:file.name };
+      state.orgAlbum.push(rec); fsSet('orgAlbum', newId, rec); renderOrgAlbum();
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+function deleteOrgPhoto(id) { state.orgAlbum = filterById(state.orgAlbum, id); fsDel('orgAlbum', id); renderOrgAlbum(); }
+function renderOrgAlbum() {
+  const grid = document.getElementById('org-album-grid');
+  const empty = document.getElementById('org-album-empty');
+  if (!state.orgAlbum.length) { grid.style.display='none'; empty.style.display='flex'; return; }
+  empty.style.display='none'; grid.style.display='grid';
+  grid.innerHTML = state.orgAlbum.map(p=>`<div style="position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;cursor:pointer;box-shadow:0 2px 8px rgba(107,70,193,.1)" onclick="openLightbox('${p.dataUrl}')"><img src="${p.dataUrl}" style="width:100%;height:100%;object-fit:cover;display:block" alt="${p.name}"><button onclick="event.stopPropagation();deleteOrgPhoto('${sid(p.id)}')" style="position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.55);color:white;border:none;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700;padding:0;line-height:1">✕</button></div>`).join('');
+}
+
+// ════════════════════════════════
+// ORG MEMBERS
+// ════════════════════════════════
+function openAddOrgModal() {
+  document.getElementById('org-add-count').value = 1;
+  document.getElementById('org-add-note').value  = '';
+  document.getElementById('org-base-input').value = state.orgBase||'';
+  renderOrgHistory(); openModal('add-org-modal');
+}
+function saveOrgBase() {
+  const v = parseInt(document.getElementById('org-base-input').value)||0;
+  state.orgBase = Math.max(0,v); fsSetProfile({ orgBase: state.orgBase }); updateDashboard();
+}
+function confirmAddOrg() {
+  const count = parseInt(document.getElementById('org-add-count').value)||0;
+  if (count < 1) { alert('請輸入至少 1 人'); return; }
+  const note = document.getElementById('org-add-note').value.trim();
+  const newId = Date.now().toString();
+  const rec = { id:newId, count, note, ym:currentYM, ts:new Date().toLocaleString('zh-TW') };
+  state.orgLog.push(rec); fsSet('orgLog', newId, rec);
+  renderOrgHistory(); updateDashboard();
+}
+function deleteOrgLog(id) {
+  state.orgLog = filterById(state.orgLog, id); fsDel('orgLog', id); renderOrgHistory(); updateDashboard();
+}
+function renderOrgHistory() {
+  const el = document.getElementById('org-history-list');
+  if (!state.orgLog.length) { el.innerHTML=''; return; }
+  el.innerHTML = `<div style="font-size:11px;font-weight:800;color:var(--purple-deep);margin-bottom:8px;letter-spacing:.05em">新增記錄</div>` +
+    [...state.orgLog].reverse().map(x=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--purple-pale);border-radius:8px;margin-bottom:6px"><div><span style="font-size:15px;font-weight:900;color:var(--purple-deep)">+${x.count}</span><span style="font-size:12px;color:var(--purple-mid);margin-left:6px">${x.note||x.ym}</span><div style="font-size:10px;color:var(--gray-400)">${x.ts}</div></div><button class="btn btn-danger btn-sm btn-icon" onclick="deleteOrgLog('${sid(x.id)}')">🗑️</button></div>`).join('');
+}
+
+// ════════════════════════════════
+// DASHBOARD
+// ════════════════════════════════
+function updateProgress() {
+  const gPV = parseFloat(document.getElementById('goal-pv').value)||0;
+  const cPV = parseFloat(document.getElementById('current-pv').value)||0;
+  const gBV = parseFloat(document.getElementById('goal-bv').value)||0;
+  const cBV = parseFloat(document.getElementById('current-bv').value)||0;
+  const pvPct = gPV ? Math.min(100,Math.round(cPV/gPV*100)) : 0;
+  const bvPct = gBV ? Math.min(100,Math.round(cBV/gBV*100)) : 0;
+  document.getElementById('pv-bar').style.width = pvPct+'%';
+  document.getElementById('bv-bar').style.width = bvPct+'%';
+  document.getElementById('pv-pct').textContent = pvPct+'%';
+  document.getElementById('bv-pct').textContent = bvPct+'%';
+  document.getElementById('pv-label').textContent = cPV+' / '+gPV;
+  document.getElementById('bv-label').textContent = cBV+' / '+gBV;
+  fsSetProfile({ goalPV:gPV, goalBV:gBV, currentPV:cPV, currentBV:cBV });
+}
+function updateDashboard() {
+  const newThisMonth = state.orgLog.filter(x => x.ym===currentYM).reduce((s,x) => s+x.count, 0);
+  const orgTotal = state.orgBase + state.orgLog.reduce((s,x) => s+x.count, 0);
+  document.getElementById('dash-org-total').innerHTML = orgTotal+'<span class="unit">人</span>';
+  document.getElementById('dash-org-new').innerHTML   = newThisMonth+'<span class="unit">人</span>';
+  const bd = document.getElementById('org-base-display'); if(bd) bd.textContent = state.orgBase;
+  document.getElementById('dash-leads-count').innerHTML = state.leads.length+'<span class="unit">人</span>';
+  const meetings = state.leads.filter(l => { if(!l.date) return false; const d=new Date(l.date); return d.getMonth()+1===currentMonth && d.getFullYear()===currentYear; }).length;
+  document.getElementById('dash-meetings-count').innerHTML = meetings+'<span class="unit">場</span>';
+  const repurchase = state.customers.filter(c => parseInt(c.repurchaseMonth)===currentMonth).length;
+  document.getElementById('dash-repurchase-count').innerHTML = repurchase+'<span class="unit">位</span>';
+  const totalBV = state.plan100.reduce((s,p) => s+p.bv, 0);
+  document.getElementById('dash-plan100-bv').innerHTML = totalBV.toLocaleString()+'<span class="unit">BV</span>';
+  const summaryBody = document.getElementById('action-summary-body');
+  summaryBody.innerHTML = `<tr><td>👥 組織總人數</td><td><span class="badge" style="background:var(--purple-deep)">${orgTotal}</span></td><td>所有歷次推薦人數的累積</td></tr><tr><td>🌟 本月推薦人數</td><td><span class="badge" style="background:var(--purple-mid)">${newThisMonth}</span></td><td>本月新加入組織的夥伴</td></tr><tr><td>📋 開發名單總數</td><td><span class="badge">${state.leads.length}</span></td><td>持續跟進潛在夥伴</td></tr><tr><td>🅰️ A 名單人數</td><td><span class="badge" style="background:var(--purple-deep)">${state.leads.filter(l=>l.ab==='A').length}</span></td><td>重點優先跟進</td></tr><tr><td>🗓️ 本月聚會場次</td><td><span class="badge" style="background:#805AD5">${meetings}</span></td><td>本月已安排聚會</td></tr><tr><td>🔔 本月需回購顧客</td><td><span class="badge" style="background:#C05621">${repurchase}</span></td><td>需主動聯繫回購</td></tr><tr><td>🏆 長客累積總 BV</td><td><span class="badge" style="background:#2F855A">${totalBV.toLocaleString()}</span></td><td>長客計畫累積業績</td></tr>`;
+  updateProgress();
+}
+
+// ════════════════════════════════
+// HISTORY PAGE
+// ════════════════════════════════
+function ymToLabel(ym) { const [y,m]=ym.split('-'); return `${y} 年 ${parseInt(m)} 月`; }
+function changeHistMonth(dir) {
+  const [y,m] = histYM.split('-').map(Number);
+  let nm=m+dir, ny=y;
+  if (nm>12) { nm=1; ny++; } if (nm<1) { nm=12; ny--; }
+  histYM = `${ny}-${String(nm).padStart(2,'0')}`; renderHistory();
+}
+function dateInYM(dateStr, ym) { if(!dateStr) return false; return dateStr.startsWith(ym); }
+function renderHistory() {
+  const [hy,hm] = histYM.split('-').map(Number);
+  document.getElementById('hist-month-label').textContent = ymToLabel(histYM);
+  const isCurrent = histYM===currentYM;
+  document.getElementById('hist-is-current').style.display = isCurrent?'inline-flex':'none';
+  const leadsThisMonth = state.leads.filter(l => dateInYM(l.date, histYM));
+  const meetings       = leadsThisMonth.length;
+  const repurchase     = state.customers.filter(c => parseInt(c.repurchaseMonth)===hm).length;
+  const custSuccess    = state.customers.filter(c => c.commStatus==='success' && (dateInYM(c.buydate,histYM)||dateInYM(c.commDate,histYM))).length;
+  const custFollow     = state.customers.filter(c => c.commStatus==='follow' && dateInYM(c.commDate,histYM)).length;
+  const orgNew         = state.orgLog.filter(x => x.ym===histYM).reduce((s,x) => s+x.count, 0);
+  const bvTotal        = state.plan100.filter(p => !p.date || p.date.slice(0,7)<=histYM).reduce((s,p) => s+p.bv, 0);
+  const pvGoal         = isCurrent ? (parseFloat(document.getElementById('goal-pv')?.value)||0) : 0;
+  const pvCur          = isCurrent ? (parseFloat(document.getElementById('current-pv')?.value)||0) : 0;
+  const pvPct          = pvGoal ? Math.round(pvCur/pvGoal*100) : 0;
+  const u = (n,unit) => `${n}<span class="hc-u" style="font-size:12px;margin-left:3px;color:var(--purple-mid)">${unit}</span>`;
+  document.getElementById('hc-leads').innerHTML        = u(leadsThisMonth.length,'人');
+  document.getElementById('hc-meetings').innerHTML     = u(meetings,'場');
+  document.getElementById('hc-repurchase').innerHTML   = u(repurchase,'位');
+  document.getElementById('hc-bv').innerHTML           = u(bvTotal.toLocaleString(),'BV');
+  document.getElementById('hc-cust-success').innerHTML = u(custSuccess,'人');
+  document.getElementById('hc-cust-follow').innerHTML  = u(custFollow,'人');
+  document.getElementById('hc-org-new').innerHTML      = u(orgNew,'人');
+  document.getElementById('hc-pv-pct').innerHTML       = isCurrent ? u(pvPct,'%') : '<span style="font-size:11px;color:var(--gray-400)">當月填入</span>';
+  const snap = state.monthlySnapshots.find(s => s.ym===histYM);
+  document.getElementById('hist-note-input').value = snap?.note||'';
+  const noteDisplay = document.getElementById('hist-note-display');
+  noteDisplay.innerHTML = snap?.note ? `<div style="background:var(--purple-pale);border-radius:10px;padding:11px 14px;font-size:13px;color:var(--gray-600);line-height:1.7;border-left:3px solid var(--purple-mid)"><div style="font-size:10px;font-weight:700;color:var(--purple-mid);margin-bottom:5px">📝 儲存於 ${snap.ts}</div>${snap.note.replace(/\n/g,'<br>')}</div>` : '';
+  const detail = document.getElementById('hist-detail');
+  const rows = [
+    { icon:'📋', label:'本月新增名單',    items: leadsThisMonth, render: l => `${l.name}（${l.ab}）${l.job?'　'+l.job:''}` },
+    { icon:'✅', label:'本月成交顧客',    items: state.customers.filter(c => c.commStatus==='success' && (dateInYM(c.buydate,histYM)||dateInYM(c.commDate,histYM))), render: c => `${c.name}　${c.product||'—'}　BV ${c.bv||0}` },
+    { icon:'△',  label:'本月還需跟進',   items: state.customers.filter(c => c.commStatus==='follow' && dateInYM(c.commDate,histYM)), render: c => `${c.name}${c.commNextDate?' · 下次：'+c.commNextDate:''}` },
+    { icon:'🌟', label:'本月推薦新增',   items: state.orgLog.filter(x => x.ym===histYM), render: x => `+${x.count} 人${x.note?' （'+x.note+'）':''}` },
+  ];
+  if (rows.every(r => r.items.length===0)) { detail.innerHTML='<div class="empty-state" style="padding:20px"><div class="icon">📂</div>這個月尚無資料</div>'; return; }
+  detail.innerHTML = rows.map(r => { if(!r.items.length) return ''; return `<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:800;color:var(--purple-deep);letter-spacing:.06em;margin-bottom:7px">${r.icon} ${r.label}　<span style="font-weight:400;color:var(--gray-400)">${r.items.length} 筆</span></div>${r.items.map(item=>`<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--purple-pale);border-radius:8px;font-size:12px;color:var(--gray-800);margin-bottom:4px"><span style="color:var(--purple-mid)">·</span>${r.render(item)}</div>`).join('')}</div>`; }).join('');
+}
+function saveHistNote() {
+  const note = document.getElementById('hist-note-input').value;
+  let snap = state.monthlySnapshots.find(s => s.ym===histYM);
+  if (!snap) { snap={ym:histYM,note:'',ts:''}; state.monthlySnapshots.push(snap); state.monthlySnapshots.sort((a,b)=>b.ym.localeCompare(a.ym)); }
+  snap.note = note; snap.ts = new Date().toLocaleString('zh-TW');
+  fsSet('monthlySnapshots', histYM, snap); renderHistory();
+}
+
+// ════════════════════════════════
+// PLAN 60
+// ════════════════════════════════
+let p60TempImages = [];
+function openPlan60Modal(id) {
+  state.editingId = id||null;
+  const d = id ? findById(state.plan60, id) : null;
+  document.getElementById('plan60-modal-title').textContent = id ? '編輯 60 天計畫成員' : '新增 60 天計畫成員';
+  document.getElementById('p60-name').value  = d?.name||'';
+  document.getElementById('p60-no').value    = d?.no||'';
+  document.getElementById('p60-start').value = d?.start||'';
+  document.getElementById('p60-note').value  = d?.note||'';
+  p60TempImages = d ? [...(d.images||[])] : [];
+  renderP60Preview(); openModal('plan60-modal');
+}
+function handleP60Images(input) {
+  const files = Array.from(input.files);
+  files.forEach(file => { const reader=new FileReader(); reader.onload=e=>{ p60TempImages.push({dataUrl:e.target.result,name:file.name}); renderP60Preview(); }; reader.readAsDataURL(file); });
+  input.value='';
+}
+function renderP60Preview() {
+  const wrap = document.getElementById('p60-img-preview');
+  wrap.innerHTML = p60TempImages.map((img,i)=>`<div style="position:relative;display:inline-block"><img src="${img.dataUrl}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:2px solid var(--purple-light);cursor:pointer" onclick="openLightbox('${img.dataUrl}')"><button onclick="removeP60TempImg(${i})" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#C53030;color:white;border:none;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700;padding:0">✕</button></div>`).join('');
+}
+function removeP60TempImg(i) { p60TempImages.splice(i,1); renderP60Preview(); }
+function savePlan60() {
+  const name = document.getElementById('p60-name').value.trim();
+  if (!name) { alert('請輸入姓名'); return; }
+  const data = { name, no: document.getElementById('p60-no').value, start: document.getElementById('p60-start').value, note: document.getElementById('p60-note').value, images:[...p60TempImages] };
+  if (state.editingId) {
+    const i = findIdxById(state.plan60, state.editingId);
+    state.plan60[i] = { ...state.plan60[i], ...data };
+    fsSet('plan60', state.editingId, state.plan60[i]);
+  } else {
+    const newId = Date.now().toString();
+    state.plan60.push({ id:newId, ...data });
+    fsSet('plan60', newId, { id:newId, ...data });
+  }
+  closeModal('plan60-modal'); renderPlan60();
+}
+function deletePlan60(id) {
+  if (!confirm('確定刪除此成員？')) return;
+  state.plan60 = filterById(state.plan60, id); fsDel('plan60', id); renderPlan60();
+}
+function calcDaysIn(startStr) {
+  if (!startStr) return null;
+  const diff = Math.floor((Date.now()-new Date(startStr))/86400000)+1;
+  return Math.max(1,Math.min(diff,60));
+}
+function renderPlan60() {
+  const grid = document.getElementById('plan60-grid');
+  document.getElementById('plan60-empty').style.display = state.plan60.length?'none':'block';
+  grid.style.display = state.plan60.length?'grid':'none';
+  grid.innerHTML = state.plan60.map(p => {
+    const pid = sid(p.id);
+    const days = calcDaysIn(p.start);
+    const pct = days ? Math.round(days/60*100) : 0;
+    const isDone = days>=60;
+    const imgs = (p.images||[]).map(img=>`<img class="p60-img-thumb" src="${img.dataUrl}" onclick="openLightbox('${img.dataUrl}')" title="${img.name}">`).join('');
+    return `<div class="p60-card"><div class="p60-card-head"><div style="display:flex;align-items:flex-start;justify-content:space-between"><div><div class="p60-card-name">👤 ${p.name}</div><div class="p60-card-meta">${p.no?'編號：'+p.no:'未填編號'} &nbsp;·&nbsp; 開始：${p.start||'未填'}</div></div><div style="display:flex;gap:4px;flex-shrink:0"><button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:white;border:none;padding:5px 9px" onclick="openPlan60Modal('${pid}')">✏️</button><button class="btn btn-sm" style="background:rgba(255,100,100,.25);color:white;border:none;padding:5px 9px" onclick="deletePlan60('${pid}')">🗑️</button></div></div>${days?`<div class="p60-day-badge">${isDone?'🎉 已完成 60 天！':`第 ${days} 天 / 60 天`}</div>`:''}</div><div class="p60-body">${days?`<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--gray-600);margin-bottom:5px"><span>計畫進度</span><span>${pct}%</span></div><div style="height:8px;background:var(--purple-light);border-radius:99px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${isDone?'linear-gradient(90deg,#38A169,#68D391)':'linear-gradient(90deg,var(--purple-deep),var(--purple-mid))'};border-radius:99px;transition:.5s"></div></div></div>`:''} ${imgs?`<div class="p60-imgs">${imgs}</div>`:'<div style="font-size:12px;color:var(--gray-400);margin-bottom:10px">尚未上傳照片</div>'} ${p.note?`<div class="p60-note">📝 ${p.note}</div>`:''}</div></div>`;
+  }).join('');
 }
 
 // ════════════════════════════════
 // MEETING TYPES
 // ════════════════════════════════
 let meetingTypes = ['一對一約訪','家庭聚會','講座說明會','線上視訊','電話溝通'];
-
 function populateMeetingSelect(selectedVal) {
   const sel = document.getElementById('lead-meeting');
-  sel.innerHTML = '<option value="">選擇種類</option>' +
-    meetingTypes.map(t => `<option value="${t}"${t===selectedVal?' selected':''}>${t}</option>`).join('');
+  sel.innerHTML = '<option value="">選擇種類</option>' + meetingTypes.map(t=>`<option value="${t}"${t===selectedVal?' selected':''}>${t}</option>`).join('');
 }
-
-function openMeetingManager() {
-  renderMeetingManagerList();
-  openModal('meeting-manager-modal');
-}
-
+function openMeetingManager() { renderMeetingManagerList(); openModal('meeting-manager-modal'); }
 function renderMeetingManagerList() {
-  const ul = document.getElementById('meeting-type-list');
-  ul.innerHTML = meetingTypes.map((t, i) => `
-    <div class="meeting-type-row" id="mt-row-${i}">
-      <span class="mt-drag">⠿</span>
-      <input class="mt-input" value="${t}" id="mt-input-${i}" onchange="meetingTypes[${i}]=this.value;populateMeetingSelect()">
-      <button class="btn btn-danger btn-sm btn-icon" onclick="deleteMeetingType(${i})">🗑️</button>
-    </div>`).join('');
+  const list = document.getElementById('meeting-type-list');
+  list.innerHTML = meetingTypes.map((t,i)=>`<div class="meeting-type-row"><span class="mt-drag">☰</span><input class="mt-input" value="${t}" onchange="meetingTypes[${i}]=this.value;populateMeetingSelect();fsSetProfile({meetingTypes})"><button class="btn btn-danger btn-sm" onclick="deleteMeetingType(${i})">✕</button></div>`).join('');
 }
-
 function deleteMeetingType(i) {
-  if (meetingTypes.length <= 1) { alert('至少保留一個種類'); return; }
-  meetingTypes.splice(i, 1);
-  renderMeetingManagerList();
-  populateMeetingSelect();
-  fsSetProfile({ meetingTypes });
+  if (meetingTypes.length<=1) { alert('至少保留一個種類'); return; }
+  meetingTypes.splice(i,1); renderMeetingManagerList(); populateMeetingSelect(); fsSetProfile({meetingTypes});
 }
-
 function addMeetingType() {
   const inp = document.getElementById('mt-new-input');
   const val = inp.value.trim();
   if (!val) { inp.focus(); return; }
   if (meetingTypes.includes(val)) { alert('此種類已存在'); return; }
-  meetingTypes.push(val);
-  inp.value = '';
-  renderMeetingManagerList();
-  populateMeetingSelect();
-  fsSetProfile({ meetingTypes });
+  meetingTypes.push(val); inp.value=''; renderMeetingManagerList(); populateMeetingSelect(); fsSetProfile({meetingTypes});
 }
 
 // ════════════════════════════════
-// FIRESTORE  — save / load
+// LIGHTBOX
 // ════════════════════════════════
-function showLoading(on) {
-  document.getElementById('loading-overlay').classList.toggle('on', on);
-}
-
-async function fsSet(col, id, data) {
-  if (!window._currentUser) return;
-  const clean = JSON.parse(JSON.stringify(data));
-  await _db.collection('users').doc(window._currentUser.uid).collection(col).doc(String(id)).set(clean, { merge: true });
-}
-async function fsDel(col, id) {
-  if (!window._currentUser) return;
-  await _db.collection('users').doc(window._currentUser.uid).collection(col).doc(String(id)).delete();
-}
-async function fsSetProfile(data) {
-  if (!window._currentUser) return;
-  await _db.collection('users').doc(window._currentUser.uid).set(data, { merge: true });
-}
-
-window._loadFromFirestore = async (uid) => {
-  showLoading(true);
-  try {
-    // user profile
-    const profileSnap = await _db.collection('users').doc(uid).get();
-    if (profileSnap.exists) {
-      const d = profileSnap.data();
-      if (d.userName)    { state.userName = d.userName; document.getElementById('user-display-name').textContent = d.userName; }
-      if (d.orgBase)     state.orgBase = d.orgBase;
-      if (d.meetingTypes) meetingTypes = d.meetingTypes;
-      if (d.goalPV)      document.getElementById('goal-pv').value    = d.goalPV;
-      if (d.goalBV)      document.getElementById('goal-bv').value    = d.goalBV;
-      if (d.currentPV)   document.getElementById('current-pv').value = d.currentPV;
-      if (d.currentBV)   document.getElementById('current-bv').value = d.currentBV;
-    }
-    // sub-collections
-    const cols = ['leads','customers','pipeline','plan100','plan60','orgLog','monthlySnapshots','orgAlbum'];
-    for (const col of cols) {
-      const snap = await _db.collection('users').doc(uid).collection(col).get();
-      state[col] = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-    }
-    populateMeetingSelect();
-    renderLeads(); renderCustomers(); renderPipeline();
-    renderPlan100(); renderPlan60(); renderOrgAlbum();
-    updateDashboard();
-  } catch(e) {
-    console.error('Firestore load error:', e);
-  } finally {
-    showLoading(false);
-  }
-};
-
-window._startListeners = () => {};
+function openLightbox(src) { document.getElementById('lightbox-img').src=src; document.getElementById('lightbox').classList.add('on'); }
 
 // ════════════════════════════════
 // INIT
 // ════════════════════════════════
+loadFromLocalStorage();
 populateMeetingSelect();
 renderLeads();
 renderCustomers();
 renderPipeline();
 renderPlan100();
+renderPlan60();
 renderOrgAlbum();
 updateDashboard();
 </script>
