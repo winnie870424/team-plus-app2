@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>事業藍圖｜Team+</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<!-- Firebase SDK -->
+<script type="module">
+// ════════════════════════════
+// FIREBASE INIT
+// ════════════════════════════
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs, addDoc, updateDoc, deleteDoc, query, where, onSnapshot }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+apiKey: “AIzaSyDk8hU_GYvI1FvuLjpUVdYtITZ2jomeDuo”,
+authDomain: “hagi-business-app.firebaseapp.com”,
+projectId: “hagi-business-app”,
+storageBucket: “hagi-business-app.firebasestorage.app”,
+messagingSenderId: “499920576099”,
+appId: “1:499920576099:web:dbd294acbf9e7125eca256”,
+measurementId: “G-WSXEXTT7EW”
+};
+const fbApp = initializeApp(firebaseConfig);
+const auth  = getAuth(fbApp);
+const db    = getFirestore(fbApp);
+
+// ── Expose to global scope so main script can call ──
+window._fb = { auth, db, doc, setDoc, getDoc, collection, getDocs, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, signOut, onAuthStateChanged };
+
+// ── Auth state listener ──
+onAuthStateChanged(auth, async (user) => {
+if (user) {
+window._currentUser = user;
+document.getElementById(‘auth-screen’).style.display = ‘none’;
+document.getElementById(‘app-wrap’).style.display    = ‘flex’;
+document.getElementById(‘user-display-name’).textContent = user.displayName || user.email.split(’@’)[0];
+document.getElementById(‘auth-email-header’).textContent = user.email;
+await window._loadFromFirestore(user.uid);
+window._startListeners(user.uid);
+} else {
+window._currentUser = null;
+document.getElementById(‘auth-screen’).style.display = ‘flex’;
+document.getElementById(‘app-wrap’).style.display    = ‘none’;
+}
+});
+
+// ── Auth actions ──
+window._doRegister = async () => {
+const email = document.getElementById(‘auth-email’).value.trim();
+const pass  = document.getElementById(‘auth-pass’).value;
+const name  = document.getElementById(‘auth-display-name’).value.trim() || email.split(’@’)[0];
+const err   = document.getElementById(‘auth-error’);
+err.textContent = ‘’;
+if (!email || !pass) { err.textContent = ‘請輸入信箱與密碼’; return; }
+if (pass.length < 6)  { err.textContent = ‘密碼至少 6 位’; return; }
+try {
+const cred = await createUserWithEmailAndPassword(auth, email, pass);
+await updateProfile(cred.user, { displayName: name });
+// create user profile doc
+await setDoc(doc(db, ‘users’, cred.user.uid), { userName: name, createdAt: new Date().toISOString() });
+} catch(e) {
+err.textContent = _authErrMsg(e.code);
+}
+};
+window._doLogin = async () => {
+const email = document.getElementById(‘auth-email’).value.trim();
+const pass  = document.getElementById(‘auth-pass’).value;
+const err   = document.getElementById(‘auth-error’);
+err.textContent = ‘’;
+try {
+await signInWithEmailAndPassword(auth, email, pass);
+} catch(e) {
+err.textContent = _authErrMsg(e.code);
+}
+};
+window._doLogout = async () => {
+if (!confirm(‘確定登出？’)) return;
+await signOut(auth);
+};
+
+function _authErrMsg(code) {
+const msgs = {
+‘auth/email-already-in-use’: ‘此信箱已被註冊’,
+‘auth/invalid-email’: ‘信箱格式不正確’,
+‘auth/wrong-password’: ‘密碼錯誤’,
+‘auth/user-not-found’: ‘找不到此帳號’,
+‘auth/weak-password’: ‘密碼強度不足（至少6位）’,
+‘auth/invalid-credential’: ‘信箱或密碼錯誤’,
+‘auth/too-many-requests’: ‘嘗試次數過多，請稍後再試’,
+};
+return msgs[code] || ‘登入失敗：’ + code;
+}
+</script>
+
+<style>
+  :root {
+    --white: #FFFFFF;
+    --purple-deep: #6B46C1;
+    --purple-mid: #9F7AEA;
+    --purple-light: #E9D8FD;
+    --purple-pale: #F5F0FF;
+    --purple-dark: #44337A;
+    --gray-50: #FAFAFA;
+    --gray-100: #F4F4F5;
+    --gray-200: #E4E4E7;
+    --gray-400: #A1A1AA;
+    --gray-600: #52525B;
+    --gray-800: #27272A;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --shadow: 0 4px 24px rgba(107,70,193,0.08);
+    --shadow-hover: 0 8px 32px rgba(107,70,193,0.16);
+    --tr: all 0.25s cubic-bezier(0.4,0,0.2,1);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Noto Sans TC', sans-serif; background: var(--gray-50); color: var(--gray-800); min-height: 100vh; font-size: 14px; line-height: 1.6; }
+
+  /* HEADER */
+  .header { background: var(--white); border-bottom: 1px solid var(--purple-light); padding: 0 20px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(107,70,193,0.07); }
+  .header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px; gap: 12px; }
+  .brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .brand-icon { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, var(--purple-deep), var(--purple-mid)); display: flex; align-items: center; justify-content: center; color: white; font-size: 17px; }
+  .brand-name { font-weight: 800; font-size: 14px; color: var(--purple-dark); }
+  .brand-sub { font-size: 10px; color: var(--purple-mid); }
+  .nav { display: flex; gap: 3px; overflow-x: auto; scrollbar-width: none; }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav-btn { padding: 7px 13px; border-radius: 9px; border: none; background: transparent; color: var(--gray-600); font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: var(--tr); white-space: nowrap; display: flex; align-items: center; gap: 5px; }
+  .nav-btn.active, .nav-btn:hover { background: var(--purple-pale); color: var(--purple-deep); }
+  .nav-btn.active { font-weight: 800; }
+  .founder-chip { display: flex; align-items: center; gap: 6px; background: var(--purple-pale); border-radius: 20px; padding: 5px 12px; font-size: 12px; color: var(--purple-deep); font-weight: 700; flex-shrink: 0; border: 1px solid var(--purple-light); }
+
+  /* MAIN */
+  .main { flex: 1; max-width: 1200px; margin: 0 auto; width: 100%; padding: 20px 14px; }
+  .page { display: none; animation: fadeIn 0.28s ease; }
+  .page.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* CARDS */
+  .card { background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; transition: var(--tr); }
+  .card:hover { box-shadow: var(--shadow-hover); }
+  .card-title { font-size: 12px; font-weight: 800; color: var(--purple-deep); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; display: flex; align-items: center; gap: 7px; }
+
+  /* GRID */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .col-span-2 { grid-column: span 2; }
+  .stack { display: flex; flex-direction: column; gap: 14px; }
+
+  /* STAT CHIP */
+  .stat-chip { background: var(--white); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); border-left: 4px solid var(--purple-mid); transition: var(--tr); }
+  .stat-chip:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+  .stat-chip .label { font-size: 11px; color: var(--gray-400); font-weight: 600; margin-bottom: 5px; }
+  .stat-chip .value { font-size: 26px; font-weight: 900; color: var(--purple-deep); line-height: 1; }
+  .stat-chip .unit { font-size: 12px; color: var(--purple-mid); font-weight: 700; margin-left: 3px; }
+
+  /* PROGRESS */
+  .progress-wrap { margin-top: 6px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--gray-600); margin-bottom: 7px; }
+  .progress-track { height: 10px; border-radius: 99px; background: var(--purple-light); overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--purple-deep), var(--purple-mid)); transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+  .progress-pct { text-align: right; font-size: 13px; font-weight: 700; color: var(--purple-deep); margin-top: 5px; }
+
+  /* TAGS */
+  .tag { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 700; }
+  .tag-a { background: var(--purple-deep); color: white; }
+  .tag-b { background: var(--purple-light); color: var(--purple-deep); }
+  .tag-c { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+  .tag-this-month { background: #D4EDDA; color: #155724; border: 1px solid #C3E6CB; }
+
+  /* TABLE */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 560px; }
+  th { background: var(--purple-pale); color: var(--purple-deep); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; padding: 9px 11px; text-align: left; white-space: nowrap; border-bottom: 2px solid var(--purple-light); }
+  td { padding: 9px 11px; border-bottom: 1px solid var(--gray-100); font-size: 13px; vertical-align: middle; }
+  tr:hover td { background: var(--purple-pale); }
+  tr.sum-row td { font-weight: 700; background: var(--purple-pale); color: var(--purple-deep); border-top: 2px solid var(--purple-light); }
+
+  /* BUTTONS */
+  .btn { display: inline-flex; align-items: center; gap: 5px; padding: 8px 16px; border-radius: var(--radius-sm); border: none; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; transition: var(--tr); white-space: nowrap; }
+  .btn-primary { background: var(--purple-deep); color: white; }
+  .btn-primary:hover { background: var(--purple-dark); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(107,70,193,.3); }
+  .btn-outline { background: transparent; color: var(--purple-deep); border: 1.5px solid var(
